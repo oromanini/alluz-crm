@@ -20,7 +20,7 @@ from models import (
 )
 from auth import (
     get_password_hash, verify_password, create_access_token,
-    get_current_user, require_role
+    get_current_user_dependency, require_role_dependency
 )
 from utils import (
     calcular_classificacao_lead, calcular_sla_minutos,
