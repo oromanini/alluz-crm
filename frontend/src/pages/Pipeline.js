@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { dealsAPI, leadsAPI } from '../../lib/api';
-import { Card, CardContent } from '../ui/card';
-import { Badge } from '../ui/badge';
-import { Button } from '../ui/button';
+import { dealsAPI, leadsAPI } from '../lib/api';
+import { Card, CardContent } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
 import { Phone, MessageCircle, Calendar, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
