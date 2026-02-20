@@ -1,0 +1,191 @@
+{
+  "identity": {
+    "name": "E1",
+    "archetype": "The Performance Pro (Solar Edition)",
+    "mission": "Create a high-velocity, high-contrast command center for solar sales.",
+    "core_principles": [
+      "Speed is Feature #1: Visuals must enable sub-second decision making.",
+      "Gold Standard: Use Gold/Yellow not just as decoration, but as the primary 'Action' signal.",
+      "Darkness is Canvas: The UI is dark to reduce eye strain and make data pop.",
+      "Density with Breath: High data density, but distinct separation via borders and negative space."
+    ]
+  },
+  "technical_constraints": {
+    "framework": "React",
+    "styling": "Tailwind CSS",
+    "components": "Shadcn/UI",
+    "theme_mode": "dark",
+    "icons": "Lucide React (Default), Phosphor Icons (for density)"
+  },
+  "typography": {
+    "fonts": {
+      "heading": {
+        "family": "Manrope",
+        "weights": ["600", "700", "800"],
+        "usage": "Page titles, Metric values, Modal headers"
+      },
+      "body": {
+        "family": "Inter",
+        "weights": ["400", "500"],
+        "usage": "General text, form labels, table content"
+      },
+      "mono": {
+        "family": "JetBrains Mono",
+        "weights": ["400", "500"],
+        "usage": "IDs, Phone numbers, Currency, SLA timers"
+      }
+    },
+    "installation_command": "npm install @fontsource/manrope @fontsource/inter @fontsource/jetbrains-mono",
+    "rules": [
+      "Headings: Tracking tight (-0.02em).",
+      "Overlines: Uppercase, Tracking wide (0.05em), Text-xs, Font-bold.",
+      "Numbers: Use tabular-nums for all data grids and timers."
+    ]
+  },
+  "colors": {
+    "palette": {
+      "background": {
+        "default": "#09090B",
+        "paper": "#18181B",
+        "subtle": "#27272A"
+      },
+      "primary": {
+        "DEFAULT": "#F59E0B",
+        "foreground": "#000000",
+        "hover": "#D97706",
+        "active": "#B45309"
+      },
+      "secondary": {
+        "DEFAULT": "#27272A",
+        "foreground": "#FFFFFF",
+        "hover": "#3F3F46"
+      },
+      "accent": {
+        "DEFAULT": "#FFD700",
+        "glow": "rgba(255, 215, 0, 0.15)"
+      },
+      "text": {
+        "primary": "#FFFFFF",
+        "secondary": "#A1A1AA",
+        "muted": "#71717A",
+        "inverse": "#000000"
+      },
+      "border": {
+        "default": "#27272A",
+        "active": "#52525B"
+      },
+      "semantic": {
+        "success": "#10B981",
+        "warning": "#F59E0B",
+        "error": "#EF4444",
+        "info": "#3B82F6",
+        "lead_a": "#FFD700",
+        "lead_b": "#94A3B8",
+        "lead_c": "#78350F"
+      }
+    },
+    "tailwind_config_extension": {
+      "colors": {
+        "brand": {
+          "gold": "#FFD700",
+          "yellow": "#F59E0B",
+          "dark": "#09090B",
+          "gray": "#18181B"
+        }
+      }
+    }
+  },
+  "layout_strategy": {
+    "spacing_scale": "Generous but Dense",
+    "container_padding": "p-6 md:p-8",
+    "grid_system": {
+      "dashboard": "grid-cols-1 md:grid-cols-4 gap-4 md:gap-6",
+      "kanban": "flex gap-4 overflow-x-auto h-[calc(100vh-120px)] snap-x",
+      "form": "grid-cols-1 md:grid-cols-2 gap-6"
+    },
+    "sidebar": {
+      "width": "w-64",
+      "behavior": "Fixed, collapsible on mobile",
+      "style": "Border-r border-white/10 bg-brand-dark/95 backdrop-blur-md"
+    },
+    "z_index": {
+      "toast": 100,
+      "modal": 50,
+      "dropdown": 40,
+      "sticky_header": 30
+    }
+  },
+  "component_rules": {
+    "buttons": {
+      "primary": "bg-brand-yellow text-black hover:bg-brand-yellow/90 font-bold shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all",
+      "secondary": "bg-transparent border border-white/20 text-white hover:bg-white/10 hover:border-white/40",
+      "ghost": "text-white/70 hover:text-white hover:bg-white/5",
+      "destructive": "bg-red-900/30 text-red-400 border border-red-900/50 hover:bg-red-900/50"
+    },
+    "cards": {
+      "style": "bg-brand-gray border border-white/5 rounded-lg shadow-none",
+      "hover": "hover:border-white/10 transition-colors"
+    },
+    "inputs": {
+      "style": "bg-brand-dark border-white/10 text-white focus:border-brand-yellow/50 focus:ring-1 focus:ring-brand-yellow/50 placeholder:text-white/20 h-10"
+    },
+    "kanban_column": {
+      "style": "min-w-[320px] max-w-[320px] bg-brand-gray/50 rounded-xl border border-white/5 flex flex-col h-full",
+      "header": "p-3 border-b border-white/5 font-bold text-sm tracking-wide uppercase text-white/80 sticky top-0 bg-brand-gray/95 backdrop-blur z-10"
+    },
+    "kanban_card": {
+      "style": "bg-brand-dark border border-white/10 rounded-md p-3 mb-3 hover:border-brand-yellow/30 cursor-grab active:cursor-grabbing shadow-sm group relative",
+      "critical_element": "Must display 'Next Action' date prominently."
+    },
+    "badges": {
+      "lead_a": "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+      "lead_b": "bg-slate-500/10 text-slate-400 border-slate-500/20",
+      "lead_c": "bg-orange-900/10 text-orange-700 border-orange-900/20",
+      "sla_ok": "bg-green-500/10 text-green-500 border-green-500/20",
+      "sla_warning": "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+      "sla_expired": "bg-red-500/10 text-red-500 border-red-500/20 animate-pulse"
+    }
+  },
+  "visual_enhancers": {
+    "gradients": "No full background gradients. Use localized 'glow' spots behind key metrics or active states.",
+    "glassmorphism": "Use backdrop-blur-md for the Sidebar and Sticky Headers. Opacity 90%.",
+    "borders": "1px borders are mandatory for all cards to define hierarchy in dark mode. Opacity 5-10%.",
+    "shadows": "Minimal use. Rely on contrast and borders."
+  },
+  "motion": {
+    "presets": {
+      "hover_lift": "hover:-translate-y-0.5 transition-transform duration-200",
+      "fade_in": "animate-in fade-in zoom-in-95 duration-200",
+      "slide_in": "animate-in slide-in-from-right-4 duration-300"
+    },
+    "accessibility": "Respect prefers-reduced-motion."
+  },
+  "accessibility": {
+    "contrast": "Ensure White text on Dark Gray background meets AA standards.",
+    "focus_states": "Visible ring-2 ring-brand-yellow/50 on all interactive elements.",
+    "testing": "All interactive elements must have data-testid attributes."
+  },
+  "assets": {
+    "icons": "Use Lucide React for UI. Use Phosphor Icons (Bold weight) for specific dashboard widgets if needed.",
+    "images": {
+      "placeholder_strategy": "Use abstract geometric patterns or high-contrast solar panel details for empty states. No generic illustrations."
+    }
+  },
+  "universal_guidelines": [
+    "NEVER use gradients for text.",
+    "NEVER use 'Inter' for Headings. Use 'Manrope'.",
+    "Interactive elements MUST have a hover state that changes brightness or border color.",
+    "Forms must use labels. Placeholders are not replacements for labels.",
+    "Data density is key for this CRM: Avoid excessive padding inside data tables. Use compact rows.",
+    "Dark Mode is the ONLY mode. Hardcode colors if necessary, or configure Tailwind to default to dark."
+  ],
+  "instructions_to_main_agent": [
+    "1. INSTALLATION: Run `npm install @fontsource/manrope @fontsource/inter @fontsource/jetbrains-mono lucide-react`.",
+    "2. CONFIG: Update tailwind.config.js to include the specific solar palette (Brand Gold/Yellow).",
+    "3. FONT SETUP: Import fonts in index.js/App.js.",
+    "4. LAYOUT: Build the SidebarLayout component first. It wraps every page.",
+    "5. DASHBOARD: Implement the Bento Grid for the main dashboard metrics.",
+    "6. KANBAN: Ensure the Kanban board handles horizontal scrolling and drag-and-drop (use @hello-pangea/dnd or similar).",
+    "7. CRITICAL: The 'Next Action' field is the heart of this system. Highlight it in Red if the date is past or missing."
+  ]
+}
