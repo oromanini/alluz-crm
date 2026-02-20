@@ -53,6 +53,9 @@ logger = logging.getLogger(__name__)
 async def get_db():
     return db
 
+# Auth dependency
+get_current_user = get_current_user_dependency(db)
+
 
 # AUTH ENDPOINTS
 @api_router.post("/auth/register", response_model=User)
