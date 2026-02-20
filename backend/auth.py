@@ -34,28 +34,31 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: AsyncIOMotorDatabase = None):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        token = credentials.credentials
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
+def get_current_user_dependency(db):
+    async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+        credentials_exception = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        try:
+            token = credentials.credentials
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            email: str = payload.get("sub")
+            if email is None:
+                raise credentials_exception
+        except JWTError:
             raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-    
-    user = await db.users.find_one({"email": email}, {"_id": 0})
-    if user is None:
-        raise credentials_exception
-    return user
+        
+        user = await db.users.find_one({"email": email}, {"_id": 0})
+        if user is None:
+            raise credentials_exception
+        return user
+    return get_current_user
 
 
-def require_role(*allowed_roles):
+def require_role_dependency(db, *allowed_roles):
+    get_current_user = get_current_user_dependency(db)
     async def role_checker(current_user: dict = Depends(get_current_user)):
         if current_user.get("role") not in allowed_roles:
             raise HTTPException(
