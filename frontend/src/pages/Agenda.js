@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { appointmentsAPI } from '../../lib/api';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Badge } from '../ui/badge';
+import { appointmentsAPI } from '../lib/api';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
 import { Calendar, Clock, MapPin, Video } from 'lucide-react';
 
 export default function Agenda() {
