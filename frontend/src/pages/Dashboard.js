@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { dashboardAPI } from '../../lib/api';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { dashboardAPI } from '../lib/api';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Users, TrendingUp, Clock, CheckCircle, XCircle, DollarSign, AlertTriangle } from 'lucide-react';
 
 export default function Dashboard() {
