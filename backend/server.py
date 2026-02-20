@@ -730,10 +730,14 @@ async def webhook_lead_capture(lead_data: WebhookLeadCapture, db=Depends(get_db)
 # USERS MANAGEMENT (Admin only)
 @api_router.get("/users", response_model=List[User])
 async def list_users(
-    current_user: dict = Depends(require_role(Role.ADMIN)),
+    current_user: dict = Depends(get_current_user),
     db=Depends(get_db)
 ):
     """Listar usu\u00e1rios (Admin)"""
+    # Check role
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
     users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
     
     for user in users:
