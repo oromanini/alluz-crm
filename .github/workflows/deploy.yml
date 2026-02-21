@@ -1,0 +1,64 @@
+name: Deploy Alluz CRM to Cloud Run
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  REGION: ${{ secrets.GCP_REGION }}
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REPO: alluz
+  BACKEND_SERVICE: alluz-backend
+  FRONTEND_SERVICE: alluz-frontend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auth to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Cloud Build backend
+        run: |
+          gcloud builds submit \
+            --config cloudbuild-backend.yaml \
+            --substitutions=_REGION="${REGION}",_REPO="${REPO}",_TAG="${GITHUB_SHA}" \
+            .
+
+      - name: Deploy backend to Cloud Run
+        run: |
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/alluz-backend:${GITHUB_SHA}"
+          gcloud run deploy "${BACKEND_SERVICE}" \
+            --image "${IMAGE}" \
+            --region "${REGION}" \
+            --allow-unauthenticated \
+            --port 8080 \
+            --set-env-vars "MONGO_URL=${{ secrets.MONGO_URL }},DB_NAME=${{ secrets.DB_NAME }}"
+
+      - name: Cloud Build frontend
+        run: |
+          gcloud builds submit \
+            --config cloudbuild-frontend.yaml \
+            --substitutions=_REGION="${REGION}",_REPO="${REPO}",_TAG="${GITHUB_SHA}",_REACT_APP_API_URL="${{ secrets.REACT_APP_API_URL }}" \
+            .
+
+      - name: Deploy frontend to Cloud Run
+        run: |
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/alluz-frontend:${GITHUB_SHA}"
+          gcloud run deploy "${FRONTEND_SERVICE}" \
+            --image "${IMAGE}" \
+            --region "${REGION}" \
+            --allow-unauthenticated \
+            --port 8080
