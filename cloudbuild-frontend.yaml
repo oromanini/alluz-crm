@@ -1,0 +1,16 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--no-cache'
+      - '--build-arg'
+      - 'REACT_APP_API_URL=${_REACT_APP_API_URL}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/alluz-frontend:${_TAG}'
+      - './frontend'
+images:
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/alluz-frontend:${_TAG}'
+substitutions:
+  _REGION: 'us-central1'
+  _REPO: 'alluz'
+  _TAG: 'latest'
