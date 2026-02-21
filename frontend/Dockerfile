@@ -8,8 +8,8 @@ RUN corepack enable \
 
 COPY frontend/ /app/
 
-ARG REACT_APP_API_URL
-ENV REACT_APP_API_URL=$REACT_APP_API_URL
+ARG REACT_APP_BACKEND_URL
+ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
 
 RUN if [ -f yarn.lock ]; then yarn install --frozen-lockfile --check-files; fi \
   && yarn build
