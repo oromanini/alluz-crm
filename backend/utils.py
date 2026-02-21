@@ -2,13 +2,24 @@ from datetime import datetime, timezone
 from models import LeadClassification, Lead
 
 
+def _normalize_text(value) -> str:
+    """Normaliza valores opcionais para comparação segura."""
+    if value is None:
+        return ''
+
+    if hasattr(value, 'value'):
+        value = value.value
+
+    return str(value).strip()
+
+
 def calcular_classificacao_lead(lead_data: dict) -> LeadClassification:
     """Calcula classificação A/B/C automaticamente"""
     conta_media = lead_data.get('conta_media', 0) or 0
-    tipo_imovel = lead_data.get('tipo_imovel')
-    urgencia = lead_data.get('urgencia')
+    tipo_imovel = _normalize_text(lead_data.get('tipo_imovel'))
+    urgencia = _normalize_text(lead_data.get('urgencia'))
     tem_sombra = lead_data.get('tem_sombra')
-    tipo_telhado = lead_data.get('tipo_telhado', '').lower()
+    tipo_telhado = _normalize_text(lead_data.get('tipo_telhado')).lower()
     
     # Lead A: conta >= R$ 450 OU (>= R$ 350 + telhado ideal + decisão <= 30 dias)
     telhado_ideal = tipo_telhado in ['ceramica', 'fibrocimento', 'metalico'] and not tem_sombra

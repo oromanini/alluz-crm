@@ -26,6 +26,36 @@ const initialLeadForm = {
   origem: 'outro',
 };
 
+const formatPhoneMask = (value) => {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+};
+
+const formatCurrencyMask = (value) => {
+  const digits = value.replace(/\D/g, '');
+
+  if (!digits) return '';
+
+  const number = Number(digits) / 100;
+  return number.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+const parseCurrencyMaskToNumber = (value) => {
+  if (!value) return null;
+
+  const normalized = value.replace(/\./g, '').replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
 export default function Leads() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,9 +90,20 @@ export default function Leads() {
 
   const handleFieldChange = (event) => {
     const { name, value } = event.target;
+
+    let normalizedValue = value;
+
+    if (name === 'telefone') {
+      normalizedValue = formatPhoneMask(value);
+    }
+
+    if (name === 'conta_media') {
+      normalizedValue = formatCurrencyMask(value);
+    }
+
     setLeadFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: normalizedValue,
     }));
   };
 
@@ -80,11 +121,11 @@ export default function Leads() {
       const payload = {
         ...leadFormData,
         nome: leadFormData.nome.trim(),
-        telefone: leadFormData.telefone.trim(),
+        telefone: leadFormData.telefone.replace(/\D/g, ''),
         email: leadFormData.email.trim() || null,
         cidade: leadFormData.cidade.trim() || null,
         bairro: leadFormData.bairro.trim() || null,
-        conta_media: leadFormData.conta_media ? Number(leadFormData.conta_media) : null,
+        conta_media: parseCurrencyMaskToNumber(leadFormData.conta_media),
       };
 
       const response = await leadsAPI.create(payload);
@@ -202,12 +243,11 @@ export default function Leads() {
                 <Input
                   id="conta_media"
                   name="conta_media"
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={leadFormData.conta_media}
                   onChange={handleFieldChange}
-                  placeholder="350"
+                  placeholder="350,00"
                   className="bg-black/30 border-white/10 text-white"
                 />
               </div>
