@@ -3,9 +3,11 @@ steps:
     args:
       - 'build'
       - '--no-cache'
+      - '-f'
+      - 'backend/Dockerfile'
       - '-t'
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/alluz-backend:${_TAG}'
-      - './backend'
+      - '.'
 images:
   - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/alluz-backend:${_TAG}'
 substitutions:

@@ -3,11 +3,13 @@ steps:
     args:
       - 'build'
       - '--no-cache'
+      - '-f'
+      - 'frontend/Dockerfile'
       - '--build-arg'
       - 'REACT_APP_API_URL=${_REACT_APP_API_URL}'
       - '-t'
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/alluz-frontend:${_TAG}'
-      - './frontend'
+      - '.'
 images:
   - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/alluz-frontend:${_TAG}'
 substitutions:
