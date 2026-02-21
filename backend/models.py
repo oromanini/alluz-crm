@@ -112,6 +112,22 @@ class LeadBase(BaseModel):
     fase_eletrica: Optional[str] = None
     urgencia: Optional[Urgencia] = None
 
+    @field_validator("origem", mode="before")
+    @classmethod
+    def normalize_origem(cls, value):
+        if not isinstance(value, str):
+            return value
+
+        normalized = value.strip().casefold()
+        if not normalized:
+            return value
+
+        for origem in Origem:
+            if origem.value.casefold() == normalized:
+                return origem
+
+        return value
+
 
 class LeadCreate(LeadBase):
     pass
