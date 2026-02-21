@@ -4,7 +4,18 @@ import { dealsAPI, leadsAPI } from '../lib/api';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
-import { Phone, MessageCircle, Calendar, AlertCircle } from 'lucide-react';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { Phone, MessageCircle, Calendar, AlertCircle, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 
 const PIPELINE_STAGES = [
@@ -26,6 +37,16 @@ export default function Pipeline() {
   const [deals, setDeals] = useState([]);
   const [leadsMap, setLeadsMap] = useState({});
   const [loading, setLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isSavingDeal, setIsSavingDeal] = useState(false);
+  const [dealInEdition, setDealInEdition] = useState(null);
+  const [dealFormData, setDealFormData] = useState({
+    etapa: '',
+    valor_estimado: '',
+    proxima_acao_tipo: '',
+    proxima_acao_descricao: '',
+    proxima_acao_data_hora: '',
+  });
 
   useEffect(() => {
     fetchData();
@@ -64,7 +85,8 @@ export default function Pipeline() {
 
     // Validar próxima ação para Proposta Enviada/Negociação
     if ((newEtapa === 'Proposta Enviada' || newEtapa === 'Negociação') && !deal.proxima_acao) {
-      toast.error('Próxima ação é obrigatória para esta etapa');
+      openEditModal(deal, newEtapa);
+      toast.error('Próxima ação é obrigatória para esta etapa. Complete no modal.');
       return;
     }
 
@@ -94,6 +116,84 @@ export default function Pipeline() {
   const isProximaAcaoVencida = (proxima_acao) => {
     if (!proxima_acao || !proxima_acao.data_hora) return false;
     return new Date(proxima_acao.data_hora) < new Date();
+  };
+
+  const toDateTimeLocalValue = (dateValue) => {
+    if (!dateValue) return '';
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const timezoneOffset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16);
+  };
+
+  const openEditModal = (deal, forcedEtapa = null) => {
+    setDealInEdition(deal);
+    setDealFormData({
+      etapa: forcedEtapa || deal.etapa,
+      valor_estimado: deal.valor_estimado || '',
+      proxima_acao_tipo: deal.proxima_acao?.tipo || '',
+      proxima_acao_descricao: deal.proxima_acao?.descricao || '',
+      proxima_acao_data_hora: toDateTimeLocalValue(deal.proxima_acao?.data_hora),
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditFieldChange = (event) => {
+    const { name, value } = event.target;
+    setDealFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleUpdateDeal = async (event) => {
+    event.preventDefault();
+
+    if (!dealInEdition) return;
+
+    const isNextActionRequired = dealFormData.etapa === 'Proposta Enviada' || dealFormData.etapa === 'Negociação';
+    const hasAnyNextActionField =
+      dealFormData.proxima_acao_tipo.trim()
+      || dealFormData.proxima_acao_descricao.trim()
+      || dealFormData.proxima_acao_data_hora;
+
+    if (isNextActionRequired && !hasAnyNextActionField) {
+      toast.error('Próxima ação é obrigatória para esta etapa');
+      return;
+    }
+
+    if (hasAnyNextActionField && (!dealFormData.proxima_acao_tipo.trim() || !dealFormData.proxima_acao_descricao.trim() || !dealFormData.proxima_acao_data_hora)) {
+      toast.error('Preencha tipo, descrição e data da próxima ação');
+      return;
+    }
+
+    const payload = {
+      ...dealInEdition,
+      etapa: dealFormData.etapa,
+      valor_estimado: dealFormData.valor_estimado ? Number(dealFormData.valor_estimado) : null,
+      proxima_acao: hasAnyNextActionField
+        ? {
+            tipo: dealFormData.proxima_acao_tipo.trim(),
+            descricao: dealFormData.proxima_acao_descricao.trim(),
+            data_hora: dealFormData.proxima_acao_data_hora,
+          }
+        : null,
+    };
+
+    try {
+      setIsSavingDeal(true);
+      await dealsAPI.update(dealInEdition.id, payload);
+      await fetchData();
+      setIsEditModalOpen(false);
+      setDealInEdition(null);
+      toast.success('Deal atualizado com sucesso!');
+    } catch (error) {
+      console.error('Error updating deal', error);
+      toast.error('Erro ao atualizar deal');
+    } finally {
+      setIsSavingDeal(false);
+    }
   };
 
   if (loading) {
@@ -199,6 +299,14 @@ export default function Pipeline() {
                                     <Button
                                       size="sm"
                                       variant="ghost"
+                                      className="h-8 px-2 text-xs hover:bg-brand-yellow/10 hover:text-brand-yellow"
+                                      onClick={() => openEditModal(deal)}
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
                                       className="flex-1 h-8 text-xs hover:bg-green-500/10 hover:text-green-400"
                                       onClick={() => window.open(`https://wa.me/55${lead.telefone.replace(/\D/g, '')}`, '_blank')}
                                       data-testid={`whatsapp-button-${deal.id}`}
@@ -231,6 +339,111 @@ export default function Pipeline() {
           ))}
         </div>
       </DragDropContext>
+
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="bg-brand-gray border-white/10 text-white sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="text-white">Editar deal</DialogTitle>
+            <DialogDescription className="text-white/60">
+              Atualize a etapa e configure a próxima ação para não quebrar o fluxo comercial.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleUpdateDeal} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="etapa" className="text-white">Etapa</Label>
+              <select
+                id="etapa"
+                name="etapa"
+                value={dealFormData.etapa}
+                onChange={handleEditFieldChange}
+                className="w-full h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white"
+                required
+              >
+                {PIPELINE_STAGES.map((stage) => (
+                  <option key={stage} value={stage} className="bg-brand-gray text-white">
+                    {stage}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="valor_estimado" className="text-white">Valor estimado (R$)</Label>
+              <Input
+                id="valor_estimado"
+                name="valor_estimado"
+                type="number"
+                min="0"
+                step="0.01"
+                value={dealFormData.valor_estimado}
+                onChange={handleEditFieldChange}
+                className="bg-black/30 border-white/10 text-white"
+              />
+            </div>
+
+            <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">
+              <h4 className="text-sm font-semibold text-brand-yellow">Próxima ação</h4>
+
+              <div className="space-y-2">
+                <Label htmlFor="proxima_acao_tipo" className="text-white">Tipo</Label>
+                <Input
+                  id="proxima_acao_tipo"
+                  name="proxima_acao_tipo"
+                  value={dealFormData.proxima_acao_tipo}
+                  onChange={handleEditFieldChange}
+                  placeholder="Ex.: Follow-up WhatsApp"
+                  className="bg-black/30 border-white/10 text-white"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="proxima_acao_descricao" className="text-white">Descrição</Label>
+                <Textarea
+                  id="proxima_acao_descricao"
+                  name="proxima_acao_descricao"
+                  value={dealFormData.proxima_acao_descricao}
+                  onChange={handleEditFieldChange}
+                  placeholder="Descreva o próximo passo"
+                  className="bg-black/30 border-white/10 text-white"
+                  rows={3}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="proxima_acao_data_hora" className="text-white">Data e hora</Label>
+                <Input
+                  id="proxima_acao_data_hora"
+                  name="proxima_acao_data_hora"
+                  type="datetime-local"
+                  value={dealFormData.proxima_acao_data_hora}
+                  onChange={handleEditFieldChange}
+                  className="bg-black/30 border-white/10 text-white"
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-white hover:bg-white/10"
+                onClick={() => setIsEditModalOpen(false)}
+                disabled={isSavingDeal}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                className="bg-brand-yellow text-black hover:bg-brand-yellow/90 font-bold"
+                disabled={isSavingDeal}
+              >
+                {isSavingDeal ? 'Salvando...' : 'Salvar alterações'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
