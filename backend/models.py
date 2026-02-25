@@ -140,6 +140,7 @@ class Lead(LeadBase):
     classificacao: LeadClassification = LeadClassification.C
     status_sla_minutos: Optional[int] = None
     primeiro_contato_em: Optional[datetime] = None
+    sla_alertado_em: Optional[datetime] = None
     responsavel_id: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
