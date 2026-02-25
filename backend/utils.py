@@ -150,6 +150,7 @@ def criar_tarefas_cadencia():
             'mensagem': 'Proposta enviada + agendar call 10 min',
             'status': 'pendente',
             'tentativas': 0,
+            'historico_tentativas': [],
             'completada_em': None
         },
         {
@@ -158,6 +159,7 @@ def criar_tarefas_cadencia():
             'mensagem': 'Ligação curta (30-60s) + pergunta de prioridade',
             'status': 'pendente',
             'tentativas': 0,
+            'historico_tentativas': [],
             'completada_em': None
         },
         {
@@ -166,6 +168,7 @@ def criar_tarefas_cadencia():
             'mensagem': 'Prova social (caso real) + print do app',
             'status': 'pendente',
             'tentativas': 0,
+            'historico_tentativas': [],
             'completada_em': None
         },
         {
@@ -174,6 +177,7 @@ def criar_tarefas_cadencia():
             'mensagem': 'Comparativo técnico (marca inversor/painéis, ART, padrão)',
             'status': 'pendente',
             'tentativas': 0,
+            'historico_tentativas': [],
             'completada_em': None
         },
         {
@@ -182,6 +186,7 @@ def criar_tarefas_cadencia():
             'mensagem': 'Posso arquivar?',
             'status': 'pendente',
             'tentativas': 0,
+            'historico_tentativas': [],
             'completada_em': None
         },
         {
@@ -190,6 +195,7 @@ def criar_tarefas_cadencia():
             'mensagem': 'Reativação: mudança de cenário (tarifa/agenda/condição)',
             'status': 'pendente',
             'tentativas': 0,
+            'historico_tentativas': [],
             'completada_em': None
         }
     ]
