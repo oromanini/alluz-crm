@@ -11,7 +11,6 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  Sun,
   Bell,
   Menu,
   X
@@ -54,9 +53,11 @@ export default function Layout() {
           {/* Logo */}
           <div className="p-6 border-b border-white/5">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-brand-yellow/10 rounded-lg flex items-center justify-center">
-                <Sun className="w-6 h-6 text-brand-yellow" />
-              </div>
+              <img
+                src="/images/logo-alluz.svg"
+                alt="Alluz Energia"
+                className="w-10 h-10 object-contain"
+              />
               <div>
                 <h1 className="text-xl font-bold text-white">Alluz Energia</h1>
                 <p className="text-xs text-white/50">CRM Solar</p>

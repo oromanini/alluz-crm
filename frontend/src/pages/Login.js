@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Sun, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Login() {
@@ -34,7 +34,11 @@ export default function Login() {
       <Card className="w-full max-w-md bg-brand-gray border-white/5" data-testid="login-card">
         <CardHeader className="space-y-4 text-center">
           <div className="mx-auto w-16 h-16 bg-brand-yellow/10 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.2)]">
-            <Sun className="w-10 h-10 text-brand-yellow" />
+            <img
+              src="/images/logo-alluz.svg"
+              alt="Alluz Energia"
+              className="w-10 h-10 object-contain"
+            />
           </div>
           <div>
             <CardTitle className="text-3xl font-bold text-white">Alluz Energia</CardTitle>
