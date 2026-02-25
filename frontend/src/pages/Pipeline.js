@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { dealsAPI, leadsAPI } from '../lib/api';
 import { Card, CardContent } from '../components/ui/card';
@@ -73,29 +73,64 @@ export default function Pipeline() {
     }
   };
 
+  const reorderDeals = (allDeals, source, destination, draggableId, nextStage) => {
+    const sourceList = allDeals.filter((deal) => deal.etapa === source.droppableId);
+    const destinationList = source.droppableId === destination.droppableId
+      ? sourceList
+      : allDeals.filter((deal) => deal.etapa === destination.droppableId);
+
+    const movingIndex = sourceList.findIndex((deal) => deal.id === draggableId);
+    if (movingIndex === -1) {
+      return allDeals;
+    }
+
+    const [movedDeal] = sourceList.splice(movingIndex, 1);
+    destinationList.splice(destination.index, 0, { ...movedDeal, etapa: nextStage });
+
+    return PIPELINE_STAGES.flatMap((stage) => {
+      if (stage === source.droppableId && source.droppableId === destination.droppableId) {
+        return destinationList;
+      }
+      if (stage === source.droppableId) {
+        return sourceList;
+      }
+      if (stage === destination.droppableId) {
+        return destinationList;
+      }
+      return allDeals.filter((deal) => deal.etapa === stage);
+    });
+  };
+
   const onDragEnd = async (result) => {
     if (!result.destination) return;
 
     const { source, destination, draggableId } = result;
-    
-    if (source.droppableId === destination.droppableId) return;
+    const movedToSamePosition = source.droppableId === destination.droppableId && source.index === destination.index;
+    if (movedToSamePosition) return;
 
     const deal = deals.find(d => d.id === draggableId);
+    if (!deal) return;
+
     const newEtapa = destination.droppableId;
 
-    // Validar próxima ação para Proposta Enviada/Negociação
     if ((newEtapa === 'Proposta Enviada' || newEtapa === 'Negociação') && !deal.proxima_acao) {
       openEditModal(deal, newEtapa);
       toast.error('Próxima ação é obrigatória para esta etapa. Complete no modal.');
       return;
     }
 
+    const previousDeals = deals;
+    const reorderedDeals = reorderDeals(deals, source, destination, draggableId, newEtapa);
+    setDeals(reorderedDeals);
+
     try {
-      await dealsAPI.update(deal.id, { ...deal, etapa: newEtapa });
-      await fetchData();
-      toast.success('Deal movido com sucesso!');
+      if (deal.etapa !== newEtapa) {
+        await dealsAPI.update(deal.id, { ...deal, etapa: newEtapa });
+        toast.success('Deal movido com sucesso!');
+      }
     } catch (error) {
       console.error('Error updating deal', error);
+      setDeals(previousDeals);
       toast.error('Erro ao mover deal');
     }
   };
@@ -109,9 +144,17 @@ export default function Pipeline() {
     return styles[classificacao] || '';
   };
 
-  const getDealsByStage = (stage) => {
-    return deals.filter(deal => deal.etapa === stage);
-  };
+  const dealsByStage = useMemo(() => {
+    return deals.reduce((acc, deal) => {
+      if (!acc[deal.etapa]) {
+        acc[deal.etapa] = [];
+      }
+      acc[deal.etapa].push(deal);
+      return acc;
+    }, {});
+  }, [deals]);
+
+  const getDealsByStage = (stage) => dealsByStage[stage] || [];
 
   const isProximaAcaoVencida = (proxima_acao) => {
     if (!proxima_acao || !proxima_acao.data_hora) return false;
@@ -219,7 +262,7 @@ export default function Pipeline() {
                 <div
                   ref={provided.innerRef}
                   {...provided.droppableProps}
-                  className="min-w-[320px] max-w-[320px] bg-brand-gray/50 rounded-xl border border-white/5 flex flex-col snap-start"
+                  className={`min-w-[320px] max-w-[320px] rounded-xl border flex flex-col snap-start transition-colors ${snapshot.isDraggingOver ? 'bg-brand-yellow/5 border-brand-yellow/30' : 'bg-brand-gray/50 border-white/5'}`}
                   data-testid={`pipeline-column-${stage}`}
                 >
                   <div className="p-3 border-b border-white/5 sticky top-0 bg-brand-gray/95 backdrop-blur z-10 rounded-t-xl">
@@ -245,7 +288,11 @@ export default function Pipeline() {
                               ref={provided.innerRef}
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
-                              className={`bg-brand-dark border border-white/10 cursor-grab active:cursor-grabbing group relative ${snapshot.isDragging ? 'shadow-lg border-brand-yellow/30' : 'hover:border-brand-yellow/30'}`}
+                              className={`bg-brand-dark border border-white/10 cursor-grab active:cursor-grabbing group relative transition-shadow ${snapshot.isDragging ? 'shadow-2xl border-brand-yellow/40 rotate-[0.4deg]' : 'hover:border-brand-yellow/30'}`}
+                              style={{
+                                ...provided.draggableProps.style,
+                                transition: snapshot.isDragging ? 'transform 120ms ease' : provided.draggableProps.style?.transition,
+                              }}
                               data-testid={`deal-card-${deal.id}`}
                             >
                               <CardContent className="p-3">

@@ -23,7 +23,7 @@ from auth import (
     get_current_user_dependency, require_role_dependency
 )
 from utils import (
-    calcular_classificacao_lead, calcular_sla_minutos,
+    calcular_classificacao_lead, calcular_sla_minutos, is_business_time,
     criar_tarefas_cadencia, gerar_link_whatsapp, validar_proxima_acao
 )
 
@@ -47,6 +47,66 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+SLA_SPEED_TO_LEAD_MINUTOS = 10
+
+
+async def atualizar_alertas_sla_speed_to_lead(db):
+    """Atualiza SLA pendente de leads sem contato e dispara alertas únicos para estouro."""
+    leads_pendentes = await db.leads.find(
+        {"primeiro_contato_em": None},
+        {"_id": 0}
+    ).to_list(1000)
+
+    if not leads_pendentes:
+        return
+
+    deve_alertar_agora = is_business_time()
+    destinatarios = []
+    if deve_alertar_agora:
+        destinatarios = await db.users.find(
+            {"role": {"$in": ["admin", "sdr"]}},
+            {"_id": 0, "id": 1}
+        ).to_list(200)
+
+    for lead in leads_pendentes:
+        created_at = lead.get("created_at")
+        if not created_at:
+            continue
+
+        created_at_dt = datetime.fromisoformat(created_at) if isinstance(created_at, str) else created_at
+        sla_atual = calcular_sla_minutos(created_at_dt)
+
+        await db.leads.update_one(
+            {"id": lead["id"]},
+            {"$set": {"status_sla_minutos": sla_atual, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+
+        if not deve_alertar_agora:
+            continue
+
+        if sla_atual <= SLA_SPEED_TO_LEAD_MINUTOS or lead.get("sla_alertado_em"):
+            continue
+
+        alerta_em = datetime.now(timezone.utc).isoformat()
+        await db.leads.update_one(
+            {"id": lead["id"]},
+            {"$set": {"sla_alertado_em": alerta_em}}
+        )
+
+        for user in destinatarios:
+            notif = Notification(
+                user_id=user['id'],
+                tipo="sla_speed_to_lead_estourado",
+                mensagem=(
+                    f"Speed-to-Lead estourado: {lead['nome']} sem contato há "
+                    f"{sla_atual} min úteis"
+                ),
+                link=f"/lead/{lead['id']}"
+            )
+            notif_doc = notif.model_dump()
+            notif_doc['created_at'] = notif_doc['created_at'].isoformat()
+            await db.notifications.insert_one(notif_doc)
 
 
 # Dependency to get db in routes
@@ -159,6 +219,8 @@ async def list_leads(
     db=Depends(get_db)
 ):
     """Listar leads com filtros"""
+    await atualizar_alertas_sla_speed_to_lead(db)
+
     query = {}
     
     if classificacao:
@@ -182,6 +244,8 @@ async def list_leads(
             lead['updated_at'] = datetime.fromisoformat(lead['updated_at'])
         if isinstance(lead.get('primeiro_contato_em'), str):
             lead['primeiro_contato_em'] = datetime.fromisoformat(lead['primeiro_contato_em'])
+        if isinstance(lead.get('sla_alertado_em'), str):
+            lead['sla_alertado_em'] = datetime.fromisoformat(lead['sla_alertado_em'])
     
     return leads
 
@@ -200,6 +264,8 @@ async def get_lead(lead_id: str, current_user: dict = Depends(get_current_user),
         lead['updated_at'] = datetime.fromisoformat(lead['updated_at'])
     if isinstance(lead.get('primeiro_contato_em'), str):
         lead['primeiro_contato_em'] = datetime.fromisoformat(lead['primeiro_contato_em'])
+    if isinstance(lead.get('sla_alertado_em'), str):
+        lead['sla_alertado_em'] = datetime.fromisoformat(lead['sla_alertado_em'])
     
     return lead
 
@@ -387,13 +453,14 @@ async def create_activity(
             {
                 "$set": {
                     "primeiro_contato_em": primeiro_contato.isoformat(),
-                    "status_sla_minutos": sla_minutos
+                    "status_sla_minutos": sla_minutos,
+                    "sla_alertado_em": lead.get("sla_alertado_em")
                 }
             }
         )
         
-        # Notificar se SLA estourou (>10 min)
-        if sla_minutos > 10:
+        # Notificar se SLA estourou (>10 min úteis)
+        if sla_minutos > SLA_SPEED_TO_LEAD_MINUTOS:
             admins = await db.users.find({"role": "admin"}, {"_id": 0}).to_list(100)
             for admin in admins:
                 notif = Notification(
@@ -612,6 +679,8 @@ async def get_dashboard_metrics(
     db=Depends(get_db)
 ):
     """M\u00e9tricas do dashboard executivo"""
+    await atualizar_alertas_sla_speed_to_lead(db)
+
     # Leads totais
     total_leads = await db.leads.count_documents({})
     
@@ -636,8 +705,14 @@ async def get_dashboard_metrics(
     sla_dentro_10min = 0
     if leads_com_sla:
         sla_medio = sum(l['status_sla_minutos'] for l in leads_com_sla) / len(leads_com_sla)
-        sla_dentro_10min = len([l for l in leads_com_sla if l['status_sla_minutos'] <= 10])
+        sla_dentro_10min = len([l for l in leads_com_sla if l['status_sla_minutos'] <= SLA_SPEED_TO_LEAD_MINUTOS])
     
+    leads_sem_contato = await db.leads.count_documents({"primeiro_contato_em": None})
+    leads_sla_em_risco = await db.leads.count_documents({
+        "primeiro_contato_em": None,
+        "status_sla_minutos": {"$gt": SLA_SPEED_TO_LEAD_MINUTOS}
+    })
+
     # Deals fechados
     fechados_ganhos = await db.deals.count_documents({"etapa": PipelineStage.FECHADO_GANHO.value})
     fechados_perdidos = await db.deals.count_documents({"etapa": PipelineStage.FECHADO_PERDIDO.value})
@@ -667,6 +742,9 @@ async def get_dashboard_metrics(
         "sla_medio_minutos": round(sla_medio, 1),
         "sla_dentro_10min": sla_dentro_10min,
         "sla_percent_dentro": round((sla_dentro_10min / len(leads_com_sla) * 100) if leads_com_sla else 0, 1),
+        "sla_limite_minutos": SLA_SPEED_TO_LEAD_MINUTOS,
+        "leads_sem_contato": leads_sem_contato,
+        "leads_sla_em_risco": leads_sla_em_risco,
         "fechados_ganhos": fechados_ganhos,
         "fechados_perdidos": fechados_perdidos,
         "valor_total_pipeline": round(valor_total, 2),

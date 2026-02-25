@@ -1,5 +1,11 @@
-from datetime import datetime, timezone
-from models import LeadClassification, Lead
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
+from models import LeadClassification
+
+
+TIMEZONE_BR = ZoneInfo("America/Sao_Paulo")
+BUSINESS_START_HOUR = 8
+BUSINESS_END_HOUR = 18
 
 
 def _normalize_text(value) -> str:
@@ -42,15 +48,73 @@ def calcular_classificacao_lead(lead_data: dict) -> LeadClassification:
     return LeadClassification.C
 
 
+def _to_br_timezone(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(TIMEZONE_BR)
+
+
+def _business_window_for_day(reference: datetime) -> tuple[datetime, datetime]:
+    start = reference.replace(
+        hour=BUSINESS_START_HOUR,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    end = reference.replace(
+        hour=BUSINESS_END_HOUR,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    return start, end
+
+
+def is_business_time(reference: datetime | None = None) -> bool:
+    dt = _to_br_timezone(reference or datetime.now(timezone.utc))
+    if dt.weekday() >= 5:
+        return False
+
+    start, end = _business_window_for_day(dt)
+    return start <= dt < end
+
+
+def calcular_minutos_horario_comercial(inicio: datetime, fim: datetime) -> int:
+    """Calcula minutos transcorridos apenas no horário comercial (seg-sex, 08h-18h)."""
+    if fim <= inicio:
+        return 0
+
+    cursor = _to_br_timezone(inicio)
+    fim_local = _to_br_timezone(fim)
+    total = timedelta()
+
+    while cursor < fim_local:
+        if cursor.weekday() >= 5:
+            # Pula para o próximo dia útil
+            cursor = (cursor + timedelta(days=1)).replace(hour=BUSINESS_START_HOUR, minute=0, second=0, microsecond=0)
+            continue
+
+        start_day, end_day = _business_window_for_day(cursor)
+
+        if cursor < start_day:
+            cursor = start_day
+            continue
+
+        if cursor >= end_day:
+            cursor = (cursor + timedelta(days=1)).replace(hour=BUSINESS_START_HOUR, minute=0, second=0, microsecond=0)
+            continue
+
+        upper_bound = min(end_day, fim_local)
+        total += upper_bound - cursor
+        cursor = upper_bound
+
+    return max(int(total.total_seconds() / 60), 0)
+
+
 def calcular_sla_minutos(created_at: datetime, primeiro_contato_em: datetime = None) -> int:
-    """Calcula tempo em minutos até primeiro contato"""
-    if primeiro_contato_em is None:
-        agora = datetime.now(timezone.utc)
-        delta = agora - created_at
-        return int(delta.total_seconds() / 60)
-    
-    delta = primeiro_contato_em - created_at
-    return int(delta.total_seconds() / 60)
+    """Calcula tempo em minutos até primeiro contato, considerando apenas horário comercial."""
+    fim = primeiro_contato_em or datetime.now(timezone.utc)
+    return calcular_minutos_horario_comercial(created_at, fim)
 
 
 def criar_tarefas_cadencia():

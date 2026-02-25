@@ -48,10 +48,18 @@ export default function Dashboard() {
     {
       title: 'SLA Médio',
       value: `${metrics?.sla_medio_minutos || 0} min`,
-      subtitle: `${metrics?.sla_percent_dentro || 0}% dentro do SLA`,
+      subtitle: `${metrics?.sla_percent_dentro || 0}% dentro do SLA · limite ${metrics?.sla_limite_minutos || 10} min úteis`,
       icon: Clock,
       color: metrics?.sla_medio_minutos > 10 ? 'text-red-400' : 'text-green-400',
       bgColor: metrics?.sla_medio_minutos > 10 ? 'bg-red-500/10' : 'bg-green-500/10'
+    },
+    {
+      title: 'Speed-to-Lead em risco',
+      value: metrics?.leads_sla_em_risco || 0,
+      subtitle: `${metrics?.leads_sem_contato || 0} leads sem 1º contato`,
+      icon: AlertTriangle,
+      color: metrics?.leads_sla_em_risco > 0 ? 'text-red-400' : 'text-green-400',
+      bgColor: metrics?.leads_sla_em_risco > 0 ? 'bg-red-500/10' : 'bg-green-500/10'
     },
     {
       title: 'Fechados (Ganhos)',
