@@ -111,6 +111,12 @@ class LeadBase(BaseModel):
     tem_sombra: Optional[bool] = None
     fase_eletrica: Optional[str] = None
     urgencia: Optional[Urgencia] = None
+    decisao_em_ate_30_dias: Optional[bool] = None
+    enviou_foto_fatura: Optional[bool] = None
+    enviou_foto_telhado: Optional[bool] = None
+    apenas_pesquisando: Optional[bool] = None
+    imovel_proprio: Optional[bool] = None
+    possui_area_util_necessaria: Optional[bool] = None
 
     @field_validator("origem", mode="before")
     @classmethod
