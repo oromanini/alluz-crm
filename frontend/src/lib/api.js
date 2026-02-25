@@ -53,6 +53,15 @@ export const dashboardAPI = {
   getMetrics: () => api.get('/dashboard/metrics'),
 };
 
+
+export const followUpCadenceAPI = {
+  get: (dealId) => api.get(`/follow-up-cadences/${dealId}`),
+  pause: (dealId) => api.put(`/follow-up-cadences/${dealId}/pause`),
+  resume: (dealId) => api.put(`/follow-up-cadences/${dealId}/resume`),
+  attempt: (dealId, dia, data) => api.post(`/follow-up-cadences/${dealId}/tasks/${dia}/attempt`, data),
+  complete: (dealId, dia, data) => api.post(`/follow-up-cadences/${dealId}/tasks/${dia}/complete`, data),
+};
+
 export const whatsappAPI = {
   getTemplates: () => api.get('/whatsapp/templates'),
   generateLink: (params) => api.post('/whatsapp/link', params),

@@ -274,6 +274,7 @@ class FollowUpTask(BaseModel):
     mensagem: str
     status: str = "pendente"
     tentativas: int = 0
+    historico_tentativas: List[Dict[str, Any]] = Field(default_factory=list)
     completada_em: Optional[datetime] = None
 
 

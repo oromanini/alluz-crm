@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { dealsAPI, leadsAPI } from '../lib/api';
+import { dealsAPI, leadsAPI, followUpCadenceAPI } from '../lib/api';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
-import { Phone, MessageCircle, Calendar, AlertCircle, Pencil } from 'lucide-react';
+import { Phone, MessageCircle, Calendar, AlertCircle, Pencil, Pause, Play, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
 const PIPELINE_STAGES = [
@@ -112,6 +112,10 @@ export default function Pipeline() {
   const [isSavingChecklist, setIsSavingChecklist] = useState(false);
   const [checklistFormData, setChecklistFormData] = useState(initialChecklistState);
   const [pendingStageChange, setPendingStageChange] = useState(null);
+  const [cadence, setCadence] = useState(null);
+  const [cadenceLoading, setCadenceLoading] = useState(false);
+  const [cadenceNote, setCadenceNote] = useState('');
+  const [cadenceChannel, setCadenceChannel] = useState('whatsapp');
 
   useEffect(() => {
     fetchData();
@@ -247,7 +251,7 @@ export default function Pipeline() {
     return new Date(proxima_acao.data_hora) < new Date();
   };
 
-  const openEditModal = (deal, forcedEtapa = null) => {
+  const openEditModal = async (deal, forcedEtapa = null) => {
     setDealInEdition(deal);
     setDealFormData({
       etapa: forcedEtapa || deal.etapa,
@@ -256,7 +260,20 @@ export default function Pipeline() {
       proxima_acao_descricao: deal.proxima_acao?.descricao || '',
       proxima_acao_data_hora: toDateTimeLocalValue(deal.proxima_acao?.data_hora),
     });
+    setCadence(null);
+    setCadenceNote('');
+    setCadenceChannel('whatsapp');
     setIsEditModalOpen(true);
+
+    try {
+      setCadenceLoading(true);
+      const response = await followUpCadenceAPI.get(deal.id);
+      setCadence(response.data);
+    } catch (error) {
+      console.error('Error loading follow-up cadence', error);
+    } finally {
+      setCadenceLoading(false);
+    }
   };
 
   const handleEditFieldChange = (event) => {
@@ -320,6 +337,47 @@ export default function Pipeline() {
       toast.error('Erro ao salvar checklist e mover deal');
     } finally {
       setIsSavingChecklist(false);
+    }
+  };
+
+  const refreshCadence = async () => {
+    if (!dealInEdition) return;
+    const response = await followUpCadenceAPI.get(dealInEdition.id);
+    setCadence(response.data);
+  };
+
+  const toggleCadenceStatus = async () => {
+    if (!dealInEdition || !cadence) return;
+    try {
+      if (cadence.status === 'ativa') {
+        await followUpCadenceAPI.pause(dealInEdition.id);
+        toast.success('Cadência pausada');
+      } else {
+        await followUpCadenceAPI.resume(dealInEdition.id);
+        toast.success('Cadência retomada');
+      }
+      await refreshCadence();
+    } catch (error) {
+      console.error('Error toggling cadence status', error);
+      toast.error('Erro ao atualizar status da cadência');
+    }
+  };
+
+  const registerCadenceAttempt = async (dia, complete = false) => {
+    if (!dealInEdition) return;
+    try {
+      if (complete) {
+        await followUpCadenceAPI.complete(dealInEdition.id, dia, { canal: cadenceChannel, notas: cadenceNote });
+        toast.success(`Tarefa D${dia} concluída`);
+      } else {
+        await followUpCadenceAPI.attempt(dealInEdition.id, dia, { canal: cadenceChannel, notas: cadenceNote });
+        toast.success(`Tentativa registrada na tarefa D${dia}`);
+      }
+      setCadenceNote('');
+      await refreshCadence();
+    } catch (error) {
+      console.error('Error updating cadence task', error);
+      toast.error('Erro ao atualizar tarefa da cadência');
     }
   };
 
@@ -657,6 +715,76 @@ export default function Pipeline() {
                 />
               </div>
             </div>
+
+            {(dealInEdition?.etapa === 'Proposta Enviada' || dealInEdition?.etapa === 'Negociação' || dealFormData.etapa === 'Proposta Enviada' || dealFormData.etapa === 'Negociação') && (
+              <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-brand-yellow">Cadência de Follow-up</h4>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="text-white hover:bg-white/10"
+                    onClick={toggleCadenceStatus}
+                    disabled={!cadence || cadenceLoading}
+                  >
+                    {cadence?.status === 'ativa' ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
+                    {cadence?.status === 'ativa' ? 'Pausar' : 'Retomar'}
+                  </Button>
+                </div>
+
+                {cadenceLoading ? (
+                  <p className="text-xs text-white/60">Carregando cadência...</p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div className="space-y-2">
+                        <Label className="text-white">Canal da tentativa</Label>
+                        <select
+                          value={cadenceChannel}
+                          onChange={(e) => setCadenceChannel(e.target.value)}
+                          className="w-full h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white"
+                        >
+                          <option value="whatsapp" className="bg-brand-gray text-white">WhatsApp</option>
+                          <option value="ligacao" className="bg-brand-gray text-white">Ligação</option>
+                          <option value="email" className="bg-brand-gray text-white">Email</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-white">Notas da tentativa</Label>
+                        <Input
+                          value={cadenceNote}
+                          onChange={(e) => setCadenceNote(e.target.value)}
+                          className="bg-black/30 border-white/10 text-white"
+                          placeholder="Ex.: cliente pediu retorno amanhã"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 max-h-56 overflow-auto pr-1">
+                      {(cadence?.tarefas || []).map((task) => (
+                        <div key={task.dia} className="border border-white/10 rounded-md p-2 bg-black/30">
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <p className="text-xs text-white/70">D{task.dia} • {task.tipo}</p>
+                              <p className="text-sm text-white">{task.mensagem}</p>
+                              <p className="text-xs text-white/60">Status: {task.status} • Tentativas: {task.tentativas || 0}</p>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button type="button" size="sm" variant="outline" className="border-white/10 text-white" onClick={() => registerCadenceAttempt(task.dia, false)}>
+                                Registrar
+                              </Button>
+                              <Button type="button" size="sm" className="bg-brand-yellow text-black hover:bg-brand-yellow/90" onClick={() => registerCadenceAttempt(task.dia, true)}>
+                                <Check className="h-3 w-3 mr-1" /> Concluir
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             <DialogFooter>
               <Button

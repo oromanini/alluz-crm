@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, File, UploadFile
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, File, UploadFile, Body
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -49,6 +49,102 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 SLA_SPEED_TO_LEAD_MINUTOS = 10
+
+
+ACTIVITY_TYPE_BY_CHANNEL = {
+    "whatsapp": "WhatsApp",
+    "ligacao": "Ligação",
+    "email": "Email"
+}
+
+
+async def obter_ou_criar_cadencia_followup(db, deal_id: str, force_reset: bool = False):
+    """Busca cadência do deal; cria automaticamente se não existir."""
+    cadencia = await db.follow_up_cadences.find_one({"deal_id": deal_id}, {"_id": 0})
+
+    if cadencia and not force_reset:
+        return cadencia
+
+    cadencia_obj = FollowUpCadence(
+        deal_id=deal_id,
+        tarefas=criar_tarefas_cadencia()
+    )
+    cadencia_doc = cadencia_obj.model_dump()
+    cadencia_doc['created_at'] = cadencia_doc['created_at'].isoformat()
+    cadencia_doc['updated_at'] = cadencia_doc['updated_at'].isoformat()
+
+    if cadencia and force_reset:
+        await db.follow_up_cadences.replace_one({"id": cadencia["id"]}, cadencia_doc)
+    elif not cadencia:
+        await db.follow_up_cadences.insert_one(cadencia_doc)
+
+    return cadencia_doc
+
+
+async def atualizar_tarefa_cadencia(
+    db,
+    deal_id: str,
+    dia: int,
+    *,
+    concluir: bool = False,
+    canal: Optional[str] = None,
+    notas: Optional[str] = None,
+    responsavel_id: Optional[str] = None,
+):
+    cadencia = await obter_ou_criar_cadencia_followup(db, deal_id)
+
+    tarefas = cadencia.get('tarefas', [])
+    tarefa_atualizada = None
+
+    for tarefa in tarefas:
+        if int(tarefa.get('dia', -1)) == int(dia):
+            historico = tarefa.get('historico_tentativas') or []
+            tentativa = {
+                "canal": canal or tarefa.get('tipo', 'whatsapp'),
+                "notas": notas,
+                "data_hora": datetime.now(timezone.utc).isoformat()
+            }
+            historico.append(tentativa)
+            tarefa['historico_tentativas'] = historico
+            tarefa['tentativas'] = int(tarefa.get('tentativas', 0)) + 1
+
+            if concluir:
+                tarefa['status'] = 'concluida'
+                tarefa['completada_em'] = datetime.now(timezone.utc).isoformat()
+
+            tarefa_atualizada = tarefa
+            break
+
+    if not tarefa_atualizada:
+        raise HTTPException(status_code=404, detail='Tarefa da cadência não encontrada para este dia')
+
+    await db.follow_up_cadences.update_one(
+        {"id": cadencia['id']},
+        {"$set": {"tarefas": tarefas, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+
+    deal = await db.deals.find_one({"id": deal_id}, {"_id": 0, "lead_id": 1})
+    if not deal:
+        raise HTTPException(status_code=404, detail='Deal não encontrado')
+
+    canal_chave = (canal or tarefa_atualizada.get('tipo', 'whatsapp')).lower()
+    tipo_atividade = ACTIVITY_TYPE_BY_CHANNEL.get(canal_chave, "Follow-up")
+
+    atividade = Activity(
+        deal_id=deal_id,
+        lead_id=deal['lead_id'],
+        tipo=tipo_atividade,
+        notas=notas or tarefa_atualizada.get('mensagem'),
+        resultado='concluída' if concluir else 'tentativa',
+        responsavel_id=responsavel_id or ''
+    )
+
+    atividade_doc = atividade.model_dump()
+    atividade_doc['data_hora'] = atividade_doc['data_hora'].isoformat()
+    atividade_doc['created_at'] = atividade_doc['created_at'].isoformat()
+    await db.activities.insert_one(atividade_doc)
+
+    return tarefa_atualizada
 
 
 async def atualizar_alertas_sla_speed_to_lead(db):
@@ -389,17 +485,13 @@ async def update_deal(
     update_data = deal_data.model_dump()
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    # Se moveu para "Proposta Enviada", criar cad\u00eancia autom\u00e1tica
-    if deal_data.etapa == PipelineStage.PROPOSTA_ENVIADA and existing.get('etapa') != PipelineStage.PROPOSTA_ENVIADA:
-        cadencia = FollowUpCadence(
-            deal_id=deal_id,
-            tarefas=criar_tarefas_cadencia()
-        )
-        cadencia_doc = cadencia.model_dump()
-        cadencia_doc['created_at'] = cadencia_doc['created_at'].isoformat()
-        cadencia_doc['updated_at'] = cadencia_doc['updated_at'].isoformat()
-        await db.follow_up_cadences.insert_one(cadencia_doc)
-    
+    # Se moveu para Proposta Enviada/Negociação, criar cadência automática (se ainda não existir)
+    if (
+        deal_data.etapa in [PipelineStage.PROPOSTA_ENVIADA, PipelineStage.NEGOCIACAO]
+        and existing.get('etapa') not in [PipelineStage.PROPOSTA_ENVIADA, PipelineStage.NEGOCIACAO]
+    ):
+        await obter_ou_criar_cadencia_followup(db, deal_id)
+
     # Se fechou, marcar closed_at
     if deal_data.etapa in [PipelineStage.FECHADO_GANHO, PipelineStage.FECHADO_PERDIDO]:
         update_data['closed_at'] = datetime.now(timezone.utc).isoformat()
@@ -500,6 +592,108 @@ async def list_activities(
             activity['created_at'] = datetime.fromisoformat(activity['created_at'])
     
     return activities
+
+
+# FOLLOW-UP CADENCE ENDPOINTS
+@api_router.get("/follow-up-cadences/{deal_id}", response_model=FollowUpCadence)
+async def get_followup_cadence(
+    deal_id: str,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Obter cadência de follow-up de um deal."""
+    cadencia = await obter_ou_criar_cadencia_followup(db, deal_id)
+
+    if isinstance(cadencia.get('created_at'), str):
+        cadencia['created_at'] = datetime.fromisoformat(cadencia['created_at'])
+    if isinstance(cadencia.get('updated_at'), str):
+        cadencia['updated_at'] = datetime.fromisoformat(cadencia['updated_at'])
+
+    for tarefa in cadencia.get('tarefas', []):
+        if isinstance(tarefa.get('completada_em'), str):
+            tarefa['completada_em'] = datetime.fromisoformat(tarefa['completada_em'])
+
+    return cadencia
+
+
+@api_router.put("/follow-up-cadences/{deal_id}/pause")
+async def pause_followup_cadence(
+    deal_id: str,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Pausar cadência de follow-up do deal."""
+    cadencia = await obter_ou_criar_cadencia_followup(db, deal_id)
+    await db.follow_up_cadences.update_one(
+        {"id": cadencia['id']},
+        {"$set": {"status": "pausada", "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"status": "ok", "cadencia_status": "pausada"}
+
+
+@api_router.put("/follow-up-cadences/{deal_id}/resume")
+async def resume_followup_cadence(
+    deal_id: str,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Retomar cadência de follow-up do deal."""
+    cadencia = await obter_ou_criar_cadencia_followup(db, deal_id)
+    await db.follow_up_cadences.update_one(
+        {"id": cadencia['id']},
+        {"$set": {"status": "ativa", "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"status": "ok", "cadencia_status": "ativa"}
+
+
+@api_router.post("/follow-up-cadences/{deal_id}/tasks/{dia}/attempt")
+async def register_followup_attempt(
+    deal_id: str,
+    dia: int,
+    payload: dict = Body(default={}),
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Registrar tentativa de contato da tarefa da cadência."""
+    canal = (payload.get('canal') or '').lower()
+    if canal and canal not in ACTIVITY_TYPE_BY_CHANNEL:
+        raise HTTPException(status_code=400, detail='Canal inválido. Use: whatsapp, ligacao ou email')
+
+    tarefa = await atualizar_tarefa_cadencia(
+        db,
+        deal_id,
+        dia,
+        concluir=False,
+        canal=canal or None,
+        notas=payload.get('notas'),
+        responsavel_id=current_user.get('id')
+    )
+    return {"status": "ok", "tarefa": tarefa}
+
+
+@api_router.post("/follow-up-cadences/{deal_id}/tasks/{dia}/complete")
+async def complete_followup_task(
+    deal_id: str,
+    dia: int,
+    payload: dict = Body(default={}),
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Concluir tarefa da cadência, registrando tentativa e atividade."""
+    canal = (payload.get('canal') or '').lower()
+    if canal and canal not in ACTIVITY_TYPE_BY_CHANNEL:
+        raise HTTPException(status_code=400, detail='Canal inválido. Use: whatsapp, ligacao ou email')
+
+    tarefa = await atualizar_tarefa_cadencia(
+        db,
+        deal_id,
+        dia,
+        concluir=True,
+        canal=canal or None,
+        notas=payload.get('notas'),
+        responsavel_id=current_user.get('id')
+    )
+    return {"status": "ok", "tarefa": tarefa}
 
 
 # PROPOSALS ENDPOINTS
@@ -728,11 +922,29 @@ async def get_dashboard_metrics(
     
     # Propostas paradas (sem atividade em 3+ dias)
     tres_dias_atras = datetime.now(timezone.utc) - timedelta(days=3)
-    propostas_paradas = await db.deals.count_documents({
-        "etapa": {"$in": [PipelineStage.PROPOSTA_ENVIADA.value, PipelineStage.NEGOCIACAO.value]},
-        "updated_at": {"$lt": tres_dias_atras.isoformat()}
-    })
-    
+    deals_em_followup = await db.deals.find(
+        {"etapa": {"$in": [PipelineStage.PROPOSTA_ENVIADA.value, PipelineStage.NEGOCIACAO.value]}},
+        {"_id": 0, "id": 1, "updated_at": 1}
+    ).to_list(5000)
+
+    propostas_paradas = 0
+    for deal in deals_em_followup:
+        ultima_atividade = await db.activities.find(
+            {"deal_id": deal['id']},
+            {"_id": 0, "data_hora": 1}
+        ).sort("data_hora", -1).limit(1).to_list(1)
+
+        referencia = deal.get('updated_at')
+        if ultima_atividade:
+            referencia = ultima_atividade[0].get('data_hora')
+
+        if not referencia:
+            continue
+
+        referencia_dt = datetime.fromisoformat(referencia) if isinstance(referencia, str) else referencia
+        if referencia_dt < tres_dias_atras:
+            propostas_paradas += 1
+
     return {
         "total_leads": total_leads,
         "leads_a": leads_a,
