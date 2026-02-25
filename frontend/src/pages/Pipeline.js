@@ -185,6 +185,12 @@ export default function Pipeline() {
     setIsChecklistModalOpen(true);
   };
 
+  const hasScheduledNextAction = (deal) => {
+    const tipo = deal?.proxima_acao?.tipo?.trim();
+    const dataHora = deal?.proxima_acao?.data_hora;
+    return Boolean(tipo && dataHora);
+  };
+
   const onDragEnd = async (result) => {
     if (!result.destination) return;
 
@@ -202,7 +208,7 @@ export default function Pipeline() {
       return;
     }
 
-    if ((newEtapa === 'Proposta Enviada' || newEtapa === 'Negociação') && !deal.proxima_acao) {
+    if ((newEtapa === 'Proposta Enviada' || newEtapa === 'Negociação') && !hasScheduledNextAction(deal)) {
       openEditModal(deal, newEtapa);
       toast.error('Próxima ação é obrigatória para esta etapa. Complete no modal.');
       return;
