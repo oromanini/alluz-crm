@@ -20,32 +20,56 @@ def _normalize_text(value) -> str:
 
 
 def calcular_classificacao_lead(lead_data: dict) -> LeadClassification:
-    """Calcula classificação A/B/C automaticamente"""
+    """Calcula classificação A/B/C automaticamente com base no checklist de contato."""
     conta_media = lead_data.get('conta_media', 0) or 0
     tipo_imovel = _normalize_text(lead_data.get('tipo_imovel'))
     urgencia = _normalize_text(lead_data.get('urgencia'))
     tem_sombra = lead_data.get('tem_sombra')
     tipo_telhado = _normalize_text(lead_data.get('tipo_telhado')).lower()
-    
-    # Lead A: conta >= R$ 450 OU (>= R$ 350 + telhado ideal + decisão <= 30 dias)
+
+    decisao_em_ate_30_dias = lead_data.get('decisao_em_ate_30_dias')
+    enviou_foto_fatura = lead_data.get('enviou_foto_fatura')
+    enviou_foto_telhado = lead_data.get('enviou_foto_telhado')
+    apenas_pesquisando = lead_data.get('apenas_pesquisando')
+    imovel_proprio_checklist = lead_data.get('imovel_proprio')
+    possui_area_util = lead_data.get('possui_area_util_necessaria')
+
+    # Compatibilidade com os campos legados para quem ainda não preencheu checklist
     telhado_ideal = tipo_telhado in ['ceramica', 'fibrocimento', 'metalico'] and not tem_sombra
-    decisao_rapida = urgencia in ['<= 7 dias', '30 dias']
-    
-    if conta_media >= 450:
-        return LeadClassification.A
-    
-    if conta_media >= 350 and telhado_ideal and decisao_rapida and tipo_imovel == 'Próprio':
-        return LeadClassification.A
-    
-    # Lead B: conta 350-449 e/ou "pesquisando"
-    if (350 <= conta_media < 450) or urgencia == 'Pesquisando':
-        return LeadClassification.B
-    
-    # Lead C: resto (aluguel, sem telhado, ano que vem, conta baixa)
-    if tipo_imovel == 'Alugado' or conta_media < 350 or urgencia == '60+ dias':
+    if decisao_em_ate_30_dias is None:
+        decisao_em_ate_30_dias = urgencia in ['<= 7 dias', '30 dias']
+    if apenas_pesquisando is None:
+        apenas_pesquisando = urgencia == 'Pesquisando'
+    if imovel_proprio_checklist is None:
+        imovel_proprio_checklist = tipo_imovel == 'Próprio'
+    if possui_area_util is None:
+        possui_area_util = bool(telhado_ideal)
+
+    # Lead C: abaixo do perfil, aluguel, sem área/telhado ou decisão para depois
+    if (
+        imovel_proprio_checklist is False
+        or possui_area_util is False
+        or enviou_foto_telhado is False
+        or decisao_em_ate_30_dias is False
+    ):
         return LeadClassification.C
-    
-    return LeadClassification.C
+
+    # Lead A: conta >= 500 + decisão <= 30 dias + fotos da conta e telhado
+    if (
+        conta_media >= 500
+        and decisao_em_ate_30_dias
+        and enviou_foto_fatura
+        and enviou_foto_telhado
+        and imovel_proprio_checklist
+        and possui_area_util
+    ):
+        return LeadClassification.A
+
+    # Lead B: conta < 500 e/ou pesquisando
+    if conta_media < 500 or apenas_pesquisando:
+        return LeadClassification.B
+
+    return LeadClassification.B
 
 
 def _to_br_timezone(dt: datetime) -> datetime:
