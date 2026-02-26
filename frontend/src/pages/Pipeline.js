@@ -98,6 +98,48 @@ const buildLeadUpdatePayload = (lead, checklistPayload) => {
   };
 };
 
+const formatPhoneMask = (value) => {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+};
+
+const formatCurrencyMask = (value) => {
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return '';
+
+  const number = Number(digits) / 100;
+  return number.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+const parseCurrencyMaskToNumber = (value) => {
+  if (!value) return null;
+
+  const normalized = value.replace(/\./g, '').replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const buildLeadFormData = (lead) => ({
+  nome: lead.nome || '',
+  telefone: formatPhoneMask(lead.telefone || ''),
+  email: lead.email || '',
+  cidade: lead.cidade || '',
+  bairro: lead.bairro || '',
+  conta_media: lead.conta_media ? Number(lead.conta_media).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }) : '',
+  origem: lead.origem || 'Outro',
+});
+
 export default function Pipeline() {
   const navigate = useNavigate();
   const [deals, setDeals] = useState([]);
@@ -121,6 +163,9 @@ export default function Pipeline() {
   const [cadenceLoading, setCadenceLoading] = useState(false);
   const [cadenceNote, setCadenceNote] = useState('');
   const [cadenceChannel, setCadenceChannel] = useState('whatsapp');
+  const [leadFormData, setLeadFormData] = useState(buildLeadFormData({}));
+  const [isSavingLead, setIsSavingLead] = useState(false);
+  const [isArchivingLead, setIsArchivingLead] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -261,6 +306,12 @@ export default function Pipeline() {
   };
 
   const openEditModal = async (deal, forcedEtapa = null) => {
+    const lead = leadsMap[deal.lead_id];
+    if (!lead) {
+      toast.error('Lead não encontrado');
+      return;
+    }
+
     setDealInEdition(deal);
     setDealFormData({
       etapa: forcedEtapa || deal.etapa,
@@ -272,6 +323,7 @@ export default function Pipeline() {
     setCadence(null);
     setCadenceNote('');
     setCadenceChannel('whatsapp');
+    setLeadFormData(buildLeadFormData(lead));
     setIsEditModalOpen(true);
 
     try {
@@ -290,6 +342,23 @@ export default function Pipeline() {
     setDealFormData((prev) => ({
       ...prev,
       [name]: value,
+    }));
+  };
+
+  const handleLeadFieldChange = (event) => {
+    const { name, value } = event.target;
+
+    let normalizedValue = value;
+    if (name === 'telefone') {
+      normalizedValue = formatPhoneMask(value);
+    }
+    if (name === 'conta_media') {
+      normalizedValue = formatCurrencyMask(value);
+    }
+
+    setLeadFormData((prev) => ({
+      ...prev,
+      [name]: normalizedValue,
     }));
   };
 
@@ -456,6 +525,72 @@ export default function Pipeline() {
     }
   };
 
+  const handleUpdateLead = async (event) => {
+    event.preventDefault();
+
+    if (!dealInEdition) return;
+
+    if (!leadFormData.nome.trim() || !leadFormData.telefone.trim()) {
+      toast.error('Nome e telefone são obrigatórios');
+      return;
+    }
+
+    const lead = leadsMap[dealInEdition.lead_id];
+    if (!lead) {
+      toast.error('Lead não encontrado');
+      return;
+    }
+
+    const payload = buildLeadUpdatePayload(lead, {
+      nome: leadFormData.nome.trim(),
+      telefone: leadFormData.telefone.replace(/\D/g, ''),
+      email: leadFormData.email.trim() || null,
+      cidade: leadFormData.cidade.trim() || null,
+      bairro: leadFormData.bairro.trim() || null,
+      conta_media: parseCurrencyMaskToNumber(leadFormData.conta_media),
+      origem: leadFormData.origem,
+    });
+
+    try {
+      setIsSavingLead(true);
+      await leadsAPI.update(lead.id, payload);
+      await fetchData();
+      toast.success('Lead atualizado com sucesso!');
+    } catch (error) {
+      console.error('Error updating lead', error);
+      toast.error('Erro ao atualizar lead');
+    } finally {
+      setIsSavingLead(false);
+    }
+  };
+
+  const handleArchiveLead = async () => {
+    if (!dealInEdition) return;
+    const lead = leadsMap[dealInEdition.lead_id];
+    if (!lead) {
+      toast.error('Lead não encontrado');
+      return;
+    }
+
+    const confirmed = window.confirm(`Deseja arquivar o lead ${lead.nome}?`);
+    if (!confirmed) return;
+
+    try {
+      setIsArchivingLead(true);
+      await leadsAPI.archive(lead.id);
+      await fetchData();
+      setIsEditModalOpen(false);
+      setDealInEdition(null);
+      toast.success('Lead arquivado com sucesso!');
+    } catch (error) {
+      console.error('Error archiving lead', error);
+      const message = error?.response?.data?.detail || 'Não foi possível arquivar o lead';
+      toast.error(message);
+    } finally {
+      setIsArchivingLead(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -511,6 +646,15 @@ export default function Pipeline() {
                                 transition: snapshot.isDragging ? 'transform 120ms ease' : dragProvided.draggableProps.style?.transition,
                               }}
                               data-testid={`deal-card-${deal.id}`}
+                              role="button"
+                              tabIndex={0}
+                              onClick={(event) => { event.stopPropagation(); openEditModal(deal); }}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  openEditModal(deal);
+                                }
+                              }}
                             >
                               <CardContent className="p-3">
                                 <div className="space-y-2">
@@ -563,7 +707,7 @@ export default function Pipeline() {
                                         size="sm"
                                         variant="ghost"
                                         className="h-8 px-2 text-xs hover:bg-brand-yellow/10 hover:text-brand-yellow"
-                                        onClick={() => openChecklistModal(deal, deal.etapa, 'manual')}
+                                        onClick={(event) => { event.stopPropagation(); openChecklistModal(deal, deal.etapa, 'manual'); }}
                                       >
                                         <Check className="w-3 h-3 mr-1" /> Checklist
                                       </Button>
@@ -572,7 +716,7 @@ export default function Pipeline() {
                                       size="sm"
                                       variant="ghost"
                                       className="h-8 px-2 text-xs hover:bg-brand-yellow/10 hover:text-brand-yellow"
-                                      onClick={() => openEditModal(deal)}
+                                      onClick={(event) => { event.stopPropagation(); openEditModal(deal); }}
                                     >
                                       <Pencil className="w-3 h-3" />
                                     </Button>
@@ -580,7 +724,7 @@ export default function Pipeline() {
                                       size="sm"
                                       variant="ghost"
                                       className="flex-1 h-8 text-xs hover:bg-green-500/10 hover:text-green-400"
-                                      onClick={() => window.open(`https://wa.me/55${lead.telefone.replace(/\D/g, '')}`, '_blank')}
+                                      onClick={(event) => { event.stopPropagation(); window.open(`https://wa.me/55${lead.telefone.replace(/\D/g, '')}`, '_blank'); }}
                                       data-testid={`whatsapp-button-${deal.id}`}
                                     >
                                       <MessageCircle className="w-3 h-3 mr-1" />
@@ -590,7 +734,7 @@ export default function Pipeline() {
                                       size="sm"
                                       variant="ghost"
                                       className="flex-1 h-8 text-xs hover:bg-blue-500/10 hover:text-blue-400"
-                                      onClick={() => navigate(`/lead/${lead.id}`)}
+                                      onClick={(event) => { event.stopPropagation(); navigate(`/lead/${lead.id}`); }}
                                     >
                                       <Calendar className="w-3 h-3 mr-1" />
                                       Ver
@@ -665,15 +809,84 @@ export default function Pipeline() {
       </Dialog>
 
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="bg-brand-gray border-white/10 text-white sm:max-w-xl">
+        <DialogContent className="bg-brand-gray border-white/10 text-white sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-white">Editar deal</DialogTitle>
+            <DialogTitle className="text-white">Detalhes do lead e deal</DialogTitle>
             <DialogDescription className="text-white/60">
-              Atualize a etapa e configure a próxima ação para não quebrar o fluxo comercial.
+              Atualize os dados do lead, arquive quando necessário e mantenha o deal com a etapa correta.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleUpdateDeal} className="space-y-4">
+          <form onSubmit={handleUpdateLead} className="space-y-4 border border-white/10 rounded-lg p-4 bg-black/20">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold text-brand-yellow">Dados do lead</h4>
+              <Button
+                type="button"
+                variant="destructive"
+                className="bg-red-600 hover:bg-red-700"
+                onClick={handleArchiveLead}
+                disabled={isArchivingLead || isSavingLead}
+              >
+                {isArchivingLead ? <span className="inline-flex rounded-full bg-black/70 p-1"><LoadingSpinner className="text-white" size={14} /></span> : 'Arquivar lead'}
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="lead_nome" className="text-white">Nome *</Label>
+                <Input id="lead_nome" name="nome" value={leadFormData.nome} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" required />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="lead_telefone" className="text-white">Telefone *</Label>
+                <Input id="lead_telefone" name="telefone" value={leadFormData.telefone} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" required />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="lead_email" className="text-white">Email</Label>
+                <Input id="lead_email" name="email" type="email" value={leadFormData.email} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="lead_cidade" className="text-white">Cidade</Label>
+                <Input id="lead_cidade" name="cidade" value={leadFormData.cidade} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="lead_bairro" className="text-white">Bairro</Label>
+                <Input id="lead_bairro" name="bairro" value={leadFormData.bairro} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="lead_conta_media" className="text-white">Conta média (R$)</Label>
+                <Input id="lead_conta_media" name="conta_media" value={leadFormData.conta_media} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="lead_origem" className="text-white">Origem</Label>
+                <select
+                  id="lead_origem"
+                  name="origem"
+                  value={leadFormData.origem}
+                  onChange={handleLeadFieldChange}
+                  className="w-full h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white"
+                >
+                  {['Meta', 'Facebook Ads', 'Google', 'Indicação', 'Orgânico', 'Outro'].map((origem) => (
+                    <option key={origem} value={origem} className="bg-brand-gray text-white">{origem}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button type="submit" className="bg-brand-yellow text-black hover:bg-brand-yellow/90 font-bold" disabled={isSavingLead || isArchivingLead}>
+                {isSavingLead ? <span className="inline-flex rounded-full bg-black/70 p-1"><LoadingSpinner className="text-brand-yellow" size={14} /></span> : 'Salvar lead'}
+              </Button>
+            </div>
+          </form>
+
+          <form onSubmit={handleUpdateDeal} className="space-y-4 border border-white/10 rounded-lg p-4 bg-black/20">
+            <h4 className="text-sm font-semibold text-brand-yellow">Dados do deal</h4>
             <div className="space-y-2">
               <Label htmlFor="etapa" className="text-white">Etapa</Label>
               <select
@@ -825,14 +1038,14 @@ export default function Pipeline() {
                 onClick={() => setIsEditModalOpen(false)}
                 disabled={isSavingDeal}
               >
-                Cancelar
+                Fechar
               </Button>
               <Button
                 type="submit"
                 className="bg-brand-yellow text-black hover:bg-brand-yellow/90 font-bold"
                 disabled={isSavingDeal}
               >
-                {isSavingDeal ? <span className="inline-flex rounded-full bg-black/70 p-1"><LoadingSpinner className="text-brand-yellow" size={14} /></span> : 'Salvar alterações'}
+                {isSavingDeal ? <span className="inline-flex rounded-full bg-black/70 p-1"><LoadingSpinner className="text-brand-yellow" size={14} /></span> : 'Salvar deal'}
               </Button>
             </DialogFooter>
           </form>
