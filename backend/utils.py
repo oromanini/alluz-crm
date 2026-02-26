@@ -72,6 +72,18 @@ def calcular_classificacao_lead(lead_data: dict) -> LeadClassification:
     return LeadClassification.B
 
 
+def checklist_qualificacao_preenchido(lead_data: dict) -> bool:
+    checklist_fields = [
+        'decisao_em_ate_30_dias',
+        'enviou_foto_fatura',
+        'enviou_foto_telhado',
+        'apenas_pesquisando',
+        'imovel_proprio',
+        'possui_area_util_necessaria',
+    ]
+    return all(lead_data.get(field) is not None for field in checklist_fields)
+
+
 def _to_br_timezone(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
