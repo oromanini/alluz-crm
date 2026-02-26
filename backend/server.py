@@ -491,12 +491,15 @@ async def update_deal(
             detail="Pr\u00f3xima a\u00e7\u00e3o \u00e9 obrigat\u00f3ria para esta etapa (Proposta Enviada/Negocia\u00e7\u00e3o)"
         )
 
-    if existing.get('etapa') == PipelineStage.LEAD_NOVO and deal_data.etapa != PipelineStage.LEAD_NOVO:
+    if (
+        existing.get('etapa') == PipelineStage.CONTATO_REALIZADO
+        and deal_data.etapa == PipelineStage.QUALIFICADO
+    ):
         lead = await db.leads.find_one({"id": existing.get('lead_id')}, {"_id": 0})
         if not lead or not checklist_qualificacao_preenchido(lead):
             raise HTTPException(
                 status_code=400,
-                detail="Preencha o checklist de qualifica\u00e7\u00e3o antes de mover o lead de Lead Novo"
+                detail="Preencha o checklist de qualifica\u00e7\u00e3o antes de mover o lead para Qualificado"
             )
 
     update_data = deal_data.model_dump()

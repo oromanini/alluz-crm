@@ -257,11 +257,11 @@ export default function Pipeline() {
 
     const newEtapa = destination.droppableId;
 
-    if (deal.etapa === 'Lead Novo' && newEtapa !== 'Lead Novo') {
+    if (deal.etapa === 'Contato Realizado' && newEtapa === 'Qualificado') {
       const lead = leadsMap[deal.lead_id];
       if (!hasChecklistCompleted(lead)) {
         openChecklistModal(deal, newEtapa, 'drag');
-        toast.error('Preencha o checklist antes de mover o lead de Lead Novo.');
+        toast.error('Preencha o checklist antes de mover o lead para Qualificado.');
         return;
       }
     }
@@ -464,19 +464,11 @@ export default function Pipeline() {
 
     if (!dealInEdition) return;
 
-    if (dealInEdition.etapa === 'Lead Novo' && dealFormData.etapa === 'Contato Realizado') {
-      const lead = leadsMap[dealInEdition.lead_id];
-      if (!hasChecklistCompleted(lead)) {
-        openChecklistModal(dealInEdition, 'Contato Realizado', 'edit');
-        return;
-      }
-    }
-
-    if (dealInEdition.etapa === 'Lead Novo' && dealFormData.etapa !== 'Lead Novo') {
+    if (dealInEdition.etapa === 'Contato Realizado' && dealFormData.etapa === 'Qualificado') {
       const lead = leadsMap[dealInEdition.lead_id];
       if (!hasChecklistCompleted(lead)) {
         openChecklistModal(dealInEdition, dealFormData.etapa, 'edit');
-        toast.error('Preencha o checklist antes de mover o lead de Lead Novo.');
+        toast.error('Preencha o checklist antes de mover o lead para Qualificado.');
         return;
       }
     }
@@ -761,7 +753,7 @@ export default function Pipeline() {
           <DialogHeader>
             <DialogTitle className="text-white">Checklist de qualificação</DialogTitle>
             <DialogDescription className="text-white/60">
-              Preencha o checklist para liberar a movimentação do lead a partir de Lead Novo e classificar automaticamente o lead.
+              Preencha o checklist para liberar a movimentação de Contato Realizado para Qualificado e classificar automaticamente o lead.
             </DialogDescription>
           </DialogHeader>
 
