@@ -24,7 +24,8 @@ from auth import (
 )
 from utils import (
     calcular_classificacao_lead, calcular_sla_minutos, is_business_time,
-    criar_tarefas_cadencia, gerar_link_whatsapp, validar_proxima_acao
+    checklist_qualificacao_preenchido, criar_tarefas_cadencia,
+    gerar_link_whatsapp, validar_proxima_acao
 )
 
 ROOT_DIR = Path(__file__).parent
@@ -481,7 +482,15 @@ async def update_deal(
             status_code=400,
             detail="Pr\u00f3xima a\u00e7\u00e3o \u00e9 obrigat\u00f3ria para esta etapa (Proposta Enviada/Negocia\u00e7\u00e3o)"
         )
-    
+
+    if existing.get('etapa') == PipelineStage.LEAD_NOVO and deal_data.etapa != PipelineStage.LEAD_NOVO:
+        lead = await db.leads.find_one({"id": existing.get('lead_id')}, {"_id": 0})
+        if not lead or not checklist_qualificacao_preenchido(lead):
+            raise HTTPException(
+                status_code=400,
+                detail="Preencha o checklist de qualifica\u00e7\u00e3o antes de mover o lead de Lead Novo"
+            )
+
     update_data = deal_data.model_dump()
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     

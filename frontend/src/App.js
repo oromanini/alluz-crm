@@ -11,6 +11,7 @@ import Agenda from './pages/Agenda';
 import Propostas from './pages/Propostas';
 import Relatorios from './pages/Relatorios';
 import Configuracoes from './pages/Configuracoes';
+import { LoadingSpinner } from './components/ui/loading-spinner';
 import './index.css';
 
 function PrivateRoute({ children }) {
@@ -19,7 +20,7 @@ function PrivateRoute({ children }) {
   if (loading) {
     return (
       <div className="min-h-screen bg-brand-dark flex items-center justify-center">
-        <div className="text-white/50">Carregando...</div>
+        <LoadingSpinner />
       </div>
     );
   }

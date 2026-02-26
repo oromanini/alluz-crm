@@ -3,6 +3,7 @@ import { appointmentsAPI } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Calendar } from '../components/ui/calendar';
+import { LoadingSpinner } from '../components/ui/loading-spinner';
 import { CalendarDays, Clock, MapPin, Video } from 'lucide-react';
 
 const formatDateKey = (date) => {
@@ -62,7 +63,7 @@ export default function Agenda() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-white/50">Carregando agenda...</div>
+        <LoadingSpinner />
       </div>
     );
   }

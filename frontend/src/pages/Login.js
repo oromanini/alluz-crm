@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { LoadingSpinner } from '../components/ui/loading-spinner';
 import { toast } from 'sonner';
 
 export default function Login() {
@@ -80,7 +80,7 @@ export default function Login() {
               data-testid="login-submit-button"
             >
               {loading ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Entrando...</>
+                <span className="inline-flex rounded-full bg-black/70 p-1"><LoadingSpinner className="text-brand-yellow" size={14} /></span>
               ) : (
                 'Entrar'
               )}

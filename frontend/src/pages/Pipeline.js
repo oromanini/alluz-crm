@@ -7,6 +7,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
+import { LoadingSpinner } from '../components/ui/loading-spinner';
 import {
   Dialog,
   DialogContent,
@@ -65,6 +66,8 @@ const serializeChecklistValue = (value) => {
   if (value === 'nao') return false;
   return null;
 };
+
+const hasChecklistCompleted = (lead) => CHECKLIST_FIELDS.every((field) => lead?.[field.key] !== null && lead?.[field.key] !== undefined);
 
 const toDateTimeLocalValue = (dateValue) => {
   if (!dateValue) return '';
@@ -207,9 +210,13 @@ export default function Pipeline() {
 
     const newEtapa = destination.droppableId;
 
-    if (deal.etapa === 'Lead Novo' && newEtapa === 'Contato Realizado') {
-      openChecklistModal(deal, newEtapa, 'drag');
-      return;
+    if (deal.etapa === 'Lead Novo' && newEtapa !== 'Lead Novo') {
+      const lead = leadsMap[deal.lead_id];
+      if (!hasChecklistCompleted(lead)) {
+        openChecklistModal(deal, newEtapa, 'drag');
+        toast.error('Preencha o checklist antes de mover o lead de Lead Novo.');
+        return;
+      }
     }
 
     if ((newEtapa === 'Proposta Enviada' || newEtapa === 'Negociação') && !hasScheduledNextAction(deal)) {
@@ -387,8 +394,20 @@ export default function Pipeline() {
     if (!dealInEdition) return;
 
     if (dealInEdition.etapa === 'Lead Novo' && dealFormData.etapa === 'Contato Realizado') {
-      openChecklistModal(dealInEdition, 'Contato Realizado', 'edit');
-      return;
+      const lead = leadsMap[dealInEdition.lead_id];
+      if (!hasChecklistCompleted(lead)) {
+        openChecklistModal(dealInEdition, 'Contato Realizado', 'edit');
+        return;
+      }
+    }
+
+    if (dealInEdition.etapa === 'Lead Novo' && dealFormData.etapa !== 'Lead Novo') {
+      const lead = leadsMap[dealInEdition.lead_id];
+      if (!hasChecklistCompleted(lead)) {
+        openChecklistModal(dealInEdition, dealFormData.etapa, 'edit');
+        toast.error('Preencha o checklist antes de mover o lead de Lead Novo.');
+        return;
+      }
     }
 
     const isNextActionRequired = dealFormData.etapa === 'Proposta Enviada' || dealFormData.etapa === 'Negociação';
@@ -438,7 +457,7 @@ export default function Pipeline() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-white/50">Carregando pipeline...</div>
+        <LoadingSpinner />
       </div>
     );
   }
@@ -537,6 +556,16 @@ export default function Pipeline() {
                                   )}
 
                                   <div className="flex gap-1 pt-2 border-t border-white/5">
+                                    {deal.etapa === 'Lead Novo' && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-8 px-2 text-xs hover:bg-brand-yellow/10 hover:text-brand-yellow"
+                                        onClick={() => openChecklistModal(deal, deal.etapa, 'manual')}
+                                      >
+                                        <Check className="w-3 h-3 mr-1" /> Checklist
+                                      </Button>
+                                    )}
                                     <Button
                                       size="sm"
                                       variant="ghost"
@@ -586,7 +615,7 @@ export default function Pipeline() {
           <DialogHeader>
             <DialogTitle className="text-white">Checklist de qualificação</DialogTitle>
             <DialogDescription className="text-white/60">
-              Preencha o checklist para mover de Lead Novo para Contato Realizado e classificar automaticamente o lead.
+              Preencha o checklist para liberar a movimentação do lead a partir de Lead Novo e classificar automaticamente o lead.
             </DialogDescription>
           </DialogHeader>
 
@@ -626,7 +655,7 @@ export default function Pipeline() {
                 className="bg-brand-yellow text-black hover:bg-brand-yellow/90 font-bold"
                 disabled={isSavingChecklist}
               >
-                {isSavingChecklist ? 'Salvando...' : 'Salvar checklist'}
+                {isSavingChecklist ? <span className="inline-flex rounded-full bg-black/70 p-1"><LoadingSpinner className="text-brand-yellow" size={14} /></span> : 'Salvar checklist'}
               </Button>
             </DialogFooter>
           </form>
@@ -733,7 +762,7 @@ export default function Pipeline() {
                 </div>
 
                 {cadenceLoading ? (
-                  <p className="text-xs text-white/60">Carregando cadência...</p>
+                  <div className="flex justify-center py-2"><LoadingSpinner size={16} /></div>
                 ) : (
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -801,7 +830,7 @@ export default function Pipeline() {
                 className="bg-brand-yellow text-black hover:bg-brand-yellow/90 font-bold"
                 disabled={isSavingDeal}
               >
-                {isSavingDeal ? 'Salvando...' : 'Salvar alterações'}
+                {isSavingDeal ? <span className="inline-flex rounded-full bg-black/70 p-1"><LoadingSpinner className="text-brand-yellow" size={14} /></span> : 'Salvar alterações'}
               </Button>
             </DialogFooter>
           </form>

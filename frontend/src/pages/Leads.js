@@ -5,6 +5,7 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { LoadingSpinner } from '../components/ui/loading-spinner';
 import {
   Dialog,
   DialogContent,
@@ -144,7 +145,7 @@ export default function Leads() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-white/50">Carregando leads...</div>
+        <LoadingSpinner />
       </div>
     );
   }
@@ -268,7 +269,7 @@ export default function Leads() {
                 className="bg-brand-yellow text-black hover:bg-brand-yellow/90 font-bold"
                 disabled={isCreatingLead}
               >
-                {isCreatingLead ? 'Salvando...' : 'Salvar lead'}
+                {isCreatingLead ? <span className="inline-flex rounded-full bg-black/70 p-1"><LoadingSpinner className="text-brand-yellow" size={14} /></span> : 'Salvar lead'}
               </Button>
             </DialogFooter>
           </form>

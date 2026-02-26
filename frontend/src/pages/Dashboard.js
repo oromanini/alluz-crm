@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { dashboardAPI } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { LoadingSpinner } from '../components/ui/loading-spinner';
 import { Users, TrendingUp, Clock, CheckCircle, XCircle, DollarSign, AlertTriangle } from 'lucide-react';
 
 export default function Dashboard() {
@@ -25,7 +26,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-white/50">Carregando...</div>
+        <LoadingSpinner />
       </div>
     );
   }
