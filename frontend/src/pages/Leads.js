@@ -58,12 +58,19 @@ const parseCurrencyMaskToNumber = (value) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
+const formatLeadValue = (value) => {
+  if (value === null || value === undefined || value === '') return 'Não informado';
+  if (typeof value === 'boolean') return value ? 'Sim' : 'Não';
+  return String(value);
+};
+
 export default function Leads() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isCreatingLead, setIsCreatingLead] = useState(false);
   const [leadFormData, setLeadFormData] = useState(initialLeadForm);
+  const [selectedLead, setSelectedLead] = useState(null);
 
   useEffect(() => {
     fetchLeads();
@@ -159,6 +166,9 @@ export default function Leads() {
     try {
       await leadsAPI.archive(lead.id);
       setLeads((prev) => prev.filter((item) => item.id !== lead.id));
+      if (selectedLead?.id === lead.id) {
+        setSelectedLead(null);
+      }
       toast.success('Lead arquivado com sucesso');
     } catch (error) {
       console.error('Error archiving lead', error);
@@ -313,9 +323,63 @@ export default function Leads() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={Boolean(selectedLead)} onOpenChange={(isOpen) => { if (!isOpen) setSelectedLead(null); }}>
+        <DialogContent className="bg-brand-gray border-white/10 text-white sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-white">Detalhes do lead</DialogTitle>
+            <DialogDescription className="text-white/60">
+              Visualize todas as informações registradas deste lead.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedLead && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <div><span className="text-white/60">Nome:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.nome)}</span></div>
+              <div><span className="text-white/60">Telefone:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.telefone)}</span></div>
+              <div><span className="text-white/60">Email:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.email)}</span></div>
+              <div><span className="text-white/60">Cidade:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.cidade)}</span></div>
+              <div><span className="text-white/60">Bairro:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.bairro)}</span></div>
+              <div><span className="text-white/60">Origem:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.origem)}</span></div>
+              <div><span className="text-white/60">Classificação:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.classificacao)}</span></div>
+              <div><span className="text-white/60">Conta média:</span> <span className="text-white font-medium">{selectedLead.conta_media ? `R$ ${selectedLead.conta_media}` : 'Não informado'}</span></div>
+              <div><span className="text-white/60">Ignorar Speed-to-Lead:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.ignorar_speed_to_lead)}</span></div>
+              <div><span className="text-white/60">Criado em:</span> <span className="text-white font-medium">{selectedLead.created_at ? new Date(selectedLead.created_at).toLocaleString('pt-BR') : 'Não informado'}</span></div>
+              <div><span className="text-white/60">Atualizado em:</span> <span className="text-white font-medium">{selectedLead.updated_at ? new Date(selectedLead.updated_at).toLocaleString('pt-BR') : 'Não informado'}</span></div>
+              <div><span className="text-white/60">Decisão em até 30 dias:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.decisao_em_ate_30_dias)}</span></div>
+              <div><span className="text-white/60">Enviou foto da fatura:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.enviou_foto_fatura)}</span></div>
+              <div><span className="text-white/60">Enviou foto do telhado:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.enviou_foto_telhado)}</span></div>
+              <div><span className="text-white/60">Apenas pesquisando:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.apenas_pesquisando)}</span></div>
+              <div><span className="text-white/60">Imóvel próprio:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.imovel_proprio)}</span></div>
+              <div><span className="text-white/60">Possui área útil necessária:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.possui_area_util_necessaria)}</span></div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-white hover:bg-white/10"
+              onClick={() => setSelectedLead(null)}
+            >
+              Fechar
+            </Button>
+            {selectedLead && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="hover:bg-red-500/10 hover:text-red-400"
+                onClick={() => handleArchiveLead(selectedLead)}
+              >
+                Arquivar
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {leads.map((lead) => (
-          <Card key={lead.id} className="bg-brand-gray border-white/5 hover:border-white/10 transition-colors" data-testid={`lead-card-${lead.id}`}>
+          <Card key={lead.id} className="bg-brand-gray border-white/5 hover:border-white/10 transition-colors cursor-pointer" data-testid={`lead-card-${lead.id}`} onClick={() => setSelectedLead(lead)}>
             <CardContent className="p-4">
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
@@ -369,7 +433,10 @@ export default function Leads() {
                     size="sm"
                     variant="ghost"
                     className="flex-1 hover:bg-green-500/10 hover:text-green-400"
-                    onClick={() => window.open(`https://wa.me/55${lead.telefone.replace(/\D/g, '')}`, '_blank')}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      window.open(`https://wa.me/55${lead.telefone.replace(/\D/g, '')}`, '_blank');
+                    }}
                   >
                     WhatsApp
                   </Button>
@@ -377,7 +444,10 @@ export default function Leads() {
                     size="sm"
                     variant="ghost"
                     className="flex-1 hover:bg-blue-500/10 hover:text-blue-400"
-                    onClick={() => window.location.href = `/lead/${lead.id}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedLead(lead);
+                    }}
                   >
                     Ver Detalhes
                   </Button>
@@ -385,7 +455,10 @@ export default function Leads() {
                     size="sm"
                     variant="ghost"
                     className="hover:bg-red-500/10 hover:text-red-400"
-                    onClick={() => handleArchiveLead(lead)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleArchiveLead(lead);
+                    }}
                   >
                     Arquivar
                   </Button>

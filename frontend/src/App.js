@@ -46,6 +46,7 @@ function AppRoutes() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="pipeline" element={<Pipeline />} />
         <Route path="leads" element={<Leads />} />
+        <Route path="lead/:leadId" element={<Leads />} />
         <Route path="agenda" element={<Agenda />} />
         <Route path="propostas" element={<Propostas />} />
         <Route path="relatorios" element={<Relatorios />} />

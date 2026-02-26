@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { dealsAPI, leadsAPI, followUpCadenceAPI } from '../lib/api';
 import { Card, CardContent } from '../components/ui/card';
@@ -98,6 +99,7 @@ const buildLeadUpdatePayload = (lead, checklistPayload) => {
 };
 
 export default function Pipeline() {
+  const navigate = useNavigate();
   const [deals, setDeals] = useState([]);
   const [leadsMap, setLeadsMap] = useState({});
   const [loading, setLoading] = useState(true);
@@ -588,7 +590,7 @@ export default function Pipeline() {
                                       size="sm"
                                       variant="ghost"
                                       className="flex-1 h-8 text-xs hover:bg-blue-500/10 hover:text-blue-400"
-                                      onClick={() => { window.location.href = `/lead/${lead.id}`; }}
+                                      onClick={() => navigate(`/lead/${lead.id}`)}
                                     >
                                       <Calendar className="w-3 h-3 mr-1" />
                                       Ver
