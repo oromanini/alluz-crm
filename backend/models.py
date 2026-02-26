@@ -117,6 +117,7 @@ class LeadBase(BaseModel):
     apenas_pesquisando: Optional[bool] = None
     imovel_proprio: Optional[bool] = None
     possui_area_util_necessaria: Optional[bool] = None
+    ignorar_speed_to_lead: bool = False
 
     @field_validator("origem", mode="before")
     @classmethod
@@ -148,6 +149,8 @@ class Lead(LeadBase):
     primeiro_contato_em: Optional[datetime] = None
     sla_alertado_em: Optional[datetime] = None
     responsavel_id: Optional[str] = None
+    arquivado: bool = False
+    arquivado_em: Optional[datetime] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

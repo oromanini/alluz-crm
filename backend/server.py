@@ -151,7 +151,11 @@ async def atualizar_tarefa_cadencia(
 async def atualizar_alertas_sla_speed_to_lead(db):
     """Atualiza SLA pendente de leads sem contato e dispara alertas únicos para estouro."""
     leads_pendentes = await db.leads.find(
-        {"primeiro_contato_em": None},
+        {
+            "primeiro_contato_em": None,
+            "ignorar_speed_to_lead": {"$ne": True},
+            "arquivado": {"$ne": True}
+        },
         {"_id": 0}
     ).to_list(1000)
 
@@ -312,6 +316,7 @@ async def list_leads(
     origem: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
+    incluir_arquivados: bool = False,
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db)
 ):
@@ -319,6 +324,9 @@ async def list_leads(
     await atualizar_alertas_sla_speed_to_lead(db)
 
     query = {}
+
+    if not incluir_arquivados:
+        query['arquivado'] = {"$ne": True}
     
     if classificacao:
         query['classificacao'] = classificacao
@@ -544,10 +552,12 @@ async def create_activity(
     lead = await db.leads.find_one({"id": activity.lead_id}, {"_id": 0})
     if lead and not lead.get('primeiro_contato_em'):
         primeiro_contato = datetime.now(timezone.utc)
-        sla_minutos = calcular_sla_minutos(
-            datetime.fromisoformat(lead['created_at']),
-            primeiro_contato
-        )
+        sla_minutos = None
+        if not lead.get('ignorar_speed_to_lead'):
+            sla_minutos = calcular_sla_minutos(
+                datetime.fromisoformat(lead['created_at']),
+                primeiro_contato
+            )
         
         await db.leads.update_one(
             {"id": activity.lead_id},
@@ -561,7 +571,7 @@ async def create_activity(
         )
         
         # Notificar se SLA estourou (>10 min úteis)
-        if sla_minutos > SLA_SPEED_TO_LEAD_MINUTOS:
+        if sla_minutos and sla_minutos > SLA_SPEED_TO_LEAD_MINUTOS:
             admins = await db.users.find({"role": "admin"}, {"_id": 0}).to_list(100)
             for admin in admins:
                 notif = Notification(
@@ -575,6 +585,49 @@ async def create_activity(
                 await db.notifications.insert_one(notif_doc)
     
     return activity
+
+
+@api_router.put("/leads/{lead_id}/archive", response_model=Lead)
+async def archive_lead(
+    lead_id: str,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Arquivar lead apenas se estiver em Lead Novo ou Fechado - Perdido."""
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+    deal = await db.deals.find_one({"lead_id": lead_id}, {"_id": 0, "etapa": 1})
+    if not deal:
+        raise HTTPException(status_code=400, detail="Lead sem deal vinculado")
+
+    etapas_permitidas = [PipelineStage.LEAD_NOVO.value, PipelineStage.FECHADO_PERDIDO.value]
+    if deal.get('etapa') not in etapas_permitidas:
+        raise HTTPException(
+            status_code=400,
+            detail="Lead só pode ser arquivado quando estiver como novo ou desistente"
+        )
+
+    now = datetime.now(timezone.utc)
+    await db.leads.update_one(
+        {"id": lead_id},
+        {"$set": {"arquivado": True, "arquivado_em": now.isoformat(), "updated_at": now.isoformat()}}
+    )
+
+    updated = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if isinstance(updated.get('created_at'), str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    if isinstance(updated.get('updated_at'), str):
+        updated['updated_at'] = datetime.fromisoformat(updated['updated_at'])
+    if isinstance(updated.get('primeiro_contato_em'), str):
+        updated['primeiro_contato_em'] = datetime.fromisoformat(updated['primeiro_contato_em'])
+    if isinstance(updated.get('sla_alertado_em'), str):
+        updated['sla_alertado_em'] = datetime.fromisoformat(updated['sla_alertado_em'])
+    if isinstance(updated.get('arquivado_em'), str):
+        updated['arquivado_em'] = datetime.fromisoformat(updated['arquivado_em'])
+
+    return updated
 
 
 @api_router.get("/activities", response_model=List[Activity])
@@ -899,8 +952,13 @@ async def get_dashboard_metrics(
         pipeline_counts[etapa.value] = count
     
     # SLA m\u00e9dio
+    speed_to_lead_filter = {
+        "ignorar_speed_to_lead": {"$ne": True},
+        "arquivado": {"$ne": True}
+    }
+
     leads_com_sla = await db.leads.find(
-        {"status_sla_minutos": {"$ne": None}},
+        {**speed_to_lead_filter, "status_sla_minutos": {"$ne": None}},
         {"_id": 0, "status_sla_minutos": 1}
     ).to_list(1000)
     
@@ -910,8 +968,9 @@ async def get_dashboard_metrics(
         sla_medio = sum(l['status_sla_minutos'] for l in leads_com_sla) / len(leads_com_sla)
         sla_dentro_10min = len([l for l in leads_com_sla if l['status_sla_minutos'] <= SLA_SPEED_TO_LEAD_MINUTOS])
     
-    leads_sem_contato = await db.leads.count_documents({"primeiro_contato_em": None})
+    leads_sem_contato = await db.leads.count_documents({**speed_to_lead_filter, "primeiro_contato_em": None})
     leads_sla_em_risco = await db.leads.count_documents({
+        **speed_to_lead_filter,
         "primeiro_contato_em": None,
         "status_sla_minutos": {"$gt": SLA_SPEED_TO_LEAD_MINUTOS}
     })

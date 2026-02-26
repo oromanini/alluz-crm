@@ -25,6 +25,7 @@ const initialLeadForm = {
   bairro: '',
   conta_media: '',
   origem: 'outro',
+  ignorar_speed_to_lead: false,
 };
 
 const formatPhoneMask = (value) => {
@@ -90,7 +91,15 @@ export default function Leads() {
   };
 
   const handleFieldChange = (event) => {
-    const { name, value } = event.target;
+    const { name, value, type, checked } = event.target;
+
+    if (type === 'checkbox') {
+      setLeadFormData((prev) => ({
+        ...prev,
+        [name]: checked,
+      }));
+      return;
+    }
 
     let normalizedValue = value;
 
@@ -127,6 +136,7 @@ export default function Leads() {
         cidade: leadFormData.cidade.trim() || null,
         bairro: leadFormData.bairro.trim() || null,
         conta_media: parseCurrencyMaskToNumber(leadFormData.conta_media),
+        ignorar_speed_to_lead: leadFormData.ignorar_speed_to_lead,
       };
 
       const response = await leadsAPI.create(payload);
@@ -139,6 +149,21 @@ export default function Leads() {
       toast.error('Não foi possível criar o lead');
     } finally {
       setIsCreatingLead(false);
+    }
+  };
+
+  const handleArchiveLead = async (lead) => {
+    const confirmed = window.confirm(`Deseja arquivar o lead ${lead.nome}?`);
+    if (!confirmed) return;
+
+    try {
+      await leadsAPI.archive(lead.id);
+      setLeads((prev) => prev.filter((item) => item.id !== lead.id));
+      toast.success('Lead arquivado com sucesso');
+    } catch (error) {
+      console.error('Error archiving lead', error);
+      const message = error?.response?.data?.detail || 'Não foi possível arquivar o lead';
+      toast.error(message);
     }
   };
 
@@ -252,6 +277,18 @@ export default function Leads() {
                   className="bg-black/30 border-white/10 text-white"
                 />
               </div>
+
+              <label className="md:col-span-2 flex items-center gap-2 text-sm text-white/80">
+                <input
+                  id="ignorar_speed_to_lead"
+                  name="ignorar_speed_to_lead"
+                  type="checkbox"
+                  checked={leadFormData.ignorar_speed_to_lead}
+                  onChange={handleFieldChange}
+                  className="rounded border-white/20 bg-black/30"
+                />
+                Lead de teste (não contabilizar no Speed-to-Lead)
+              </label>
             </div>
 
             <DialogFooter>
@@ -283,9 +320,16 @@ export default function Leads() {
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="font-bold text-white">{lead.nome}</h3>
-                  <Badge className={`text-xs font-bold border ${getClassificationBadge(lead.classificacao)}`}>
-                    {lead.classificacao}
-                  </Badge>
+                  <div className="flex items-center gap-1">
+                    {lead.ignorar_speed_to_lead && (
+                      <Badge className="text-[10px] font-bold border bg-purple-500/10 text-purple-300 border-purple-400/20">
+                        Teste
+                      </Badge>
+                    )}
+                    <Badge className={`text-xs font-bold border ${getClassificationBadge(lead.classificacao)}`}>
+                      {lead.classificacao}
+                    </Badge>
+                  </div>
                 </div>
 
                 <div className="space-y-2 text-sm text-white/60">
@@ -336,6 +380,14 @@ export default function Leads() {
                     onClick={() => window.location.href = `/lead/${lead.id}`}
                   >
                     Ver Detalhes
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="hover:bg-red-500/10 hover:text-red-400"
+                    onClick={() => handleArchiveLead(lead)}
+                  >
+                    Arquivar
                   </Button>
                 </div>
               </div>
