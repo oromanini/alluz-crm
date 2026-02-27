@@ -10,6 +10,12 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { LoadingSpinner } from '../components/ui/loading-spinner';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../components/ui/tooltip';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -693,45 +699,72 @@ export default function Pipeline() {
                                     </div>
                                   )}
 
-                                  <div className="flex gap-1 pt-2 border-t border-white/5">
-                                    {deal.etapa === 'Lead Novo' && (
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className="h-8 px-2 text-xs hover:bg-brand-yellow/10 hover:text-brand-yellow"
-                                        onClick={(event) => { event.stopPropagation(); openChecklistModal(deal, deal.etapa, 'manual'); }}
-                                      >
-                                        <Check className="w-3 h-3 mr-1" /> Checklist
-                                      </Button>
-                                    )}
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-8 px-2 text-xs hover:bg-brand-yellow/10 hover:text-brand-yellow"
-                                      onClick={(event) => { event.stopPropagation(); openEditModal(deal); }}
-                                    >
-                                      <Pencil className="w-3 h-3" />
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="flex-1 h-8 text-xs hover:bg-green-500/10 hover:text-green-400"
-                                      onClick={(event) => { event.stopPropagation(); window.open(`https://wa.me/55${lead.telefone.replace(/\D/g, '')}`, '_blank'); }}
-                                      data-testid={`whatsapp-button-${deal.id}`}
-                                    >
-                                      <MessageCircle className="w-3 h-3 mr-1" />
-                                      WhatsApp
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="flex-1 h-8 text-xs hover:bg-blue-500/10 hover:text-blue-400"
-                                      onClick={(event) => { event.stopPropagation(); navigate(`/lead/${lead.id}`); }}
-                                    >
-                                      <Calendar className="w-3 h-3 mr-1" />
-                                      Ver
-                                    </Button>
-                                  </div>
+                                  <TooltipProvider delayDuration={200}>
+                                    <div className="flex items-center gap-1 pt-2 border-t border-white/5">
+                                      {deal.etapa === 'Lead Novo' && (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              aria-label="Abrir checklist"
+                                              className="h-8 w-8 p-0 hover:bg-brand-yellow/10 hover:text-brand-yellow"
+                                              onClick={(event) => { event.stopPropagation(); openChecklistModal(deal, deal.etapa, 'manual'); }}
+                                            >
+                                              <Check className="w-3 h-3" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent>Abrir checklist</TooltipContent>
+                                        </Tooltip>
+                                      )}
+
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            aria-label="Editar lead"
+                                            className="h-8 w-8 p-0 hover:bg-brand-yellow/10 hover:text-brand-yellow"
+                                            onClick={(event) => { event.stopPropagation(); openEditModal(deal); }}
+                                          >
+                                            <Pencil className="w-3 h-3" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Editar lead</TooltipContent>
+                                      </Tooltip>
+
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            aria-label="Abrir conversa no WhatsApp"
+                                            className="h-8 w-8 p-0 hover:bg-green-500/10 hover:text-green-400"
+                                            onClick={(event) => { event.stopPropagation(); window.open(`https://wa.me/55${lead.telefone.replace(/\D/g, '')}`, '_blank'); }}
+                                            data-testid={`whatsapp-button-${deal.id}`}
+                                          >
+                                            <MessageCircle className="w-3 h-3" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Abrir WhatsApp</TooltipContent>
+                                      </Tooltip>
+
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            aria-label="Ver detalhes do lead"
+                                            className="h-8 w-8 p-0 hover:bg-blue-500/10 hover:text-blue-400"
+                                            onClick={(event) => { event.stopPropagation(); navigate(`/lead/${lead.id}`); }}
+                                          >
+                                            <Calendar className="w-3 h-3" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Ver detalhes</TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                  </TooltipProvider>
                                 </div>
                               </CardContent>
                             </Card>
