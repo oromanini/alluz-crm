@@ -160,11 +160,23 @@ export default function Pipeline() {
     proxima_acao_tipo: '',
     proxima_acao_descricao: '',
     proxima_acao_data_hora: '',
+    proxima_acao_responsavel: '',
+    proxima_acao_canal: '',
   });
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
   const [isSavingChecklist, setIsSavingChecklist] = useState(false);
   const [checklistFormData, setChecklistFormData] = useState(initialChecklistState);
   const [pendingStageChange, setPendingStageChange] = useState(null);
+  const [pendingMoveAction, setPendingMoveAction] = useState(null);
+  const [isMoveActionModalOpen, setIsMoveActionModalOpen] = useState(false);
+  const [isSavingMoveAction, setIsSavingMoveAction] = useState(false);
+  const [moveActionFormData, setMoveActionFormData] = useState({
+    tipo: '',
+    data_hora: '',
+    responsavel: '',
+    canal: 'WhatsApp',
+    descricao: '',
+  });
   const [cadence, setCadence] = useState(null);
   const [cadenceLoading, setCadenceLoading] = useState(false);
   const [cadenceNote, setCadenceNote] = useState('');
@@ -245,10 +257,20 @@ export default function Pipeline() {
     setIsChecklistModalOpen(true);
   };
 
-  const hasScheduledNextAction = (deal) => {
-    const tipo = deal?.proxima_acao?.tipo?.trim();
-    const dataHora = deal?.proxima_acao?.data_hora;
-    return Boolean(tipo && dataHora);
+  const STAGES_WITH_OPTIONAL_NEXT_ACTION = ['Fechado - Ganho', 'Fechado - Perdido', 'Nutrição (Lead C)'];
+
+  const stageRequiresNextAction = (stage) => !STAGES_WITH_OPTIONAL_NEXT_ACTION.includes(stage);
+
+  const openMoveActionModal = (deal, toStage) => {
+    setPendingMoveAction({ deal, toStage });
+    setMoveActionFormData({
+      tipo: deal?.proxima_acao?.tipo || '',
+      data_hora: toDateTimeLocalValue(deal?.proxima_acao?.data_hora),
+      responsavel: deal?.proxima_acao?.responsavel || '',
+      canal: deal?.proxima_acao?.canal || 'WhatsApp',
+      descricao: deal?.proxima_acao?.descricao || '',
+    });
+    setIsMoveActionModalOpen(true);
   };
 
   const onDragEnd = async (result) => {
@@ -263,6 +285,11 @@ export default function Pipeline() {
 
     const newEtapa = destination.droppableId;
 
+    if (source.droppableId === destination.droppableId) {
+      setDeals(reorderDeals(deals, source, destination, draggableId, newEtapa));
+      return;
+    }
+
     if (deal.etapa === 'Contato Realizado' && newEtapa === 'Qualificado') {
       const lead = leadsMap[deal.lead_id];
       if (!hasChecklistCompleted(lead)) {
@@ -272,24 +299,17 @@ export default function Pipeline() {
       }
     }
 
-    if ((newEtapa === 'Proposta Enviada' || newEtapa === 'Negociação') && !hasScheduledNextAction(deal)) {
-      openEditModal(deal, newEtapa);
-      toast.error('Próxima ação é obrigatória para esta etapa. Complete no modal.');
+    if (stageRequiresNextAction(newEtapa)) {
+      openMoveActionModal(deal, newEtapa);
       return;
     }
 
-    const previousDeals = deals;
-    const reorderedDeals = reorderDeals(deals, source, destination, draggableId, newEtapa);
-    setDeals(reorderedDeals);
-
     try {
-      if (deal.etapa !== newEtapa) {
-        await dealsAPI.update(deal.id, { ...deal, etapa: newEtapa });
-        toast.success('Deal movido com sucesso!');
-      }
+      await dealsAPI.update(deal.id, { ...deal, etapa: newEtapa });
+      await fetchData();
+      toast.success('Deal movido com sucesso!');
     } catch (error) {
       console.error('Error updating deal', error);
-      setDeals(previousDeals);
       toast.error('Erro ao mover deal');
     }
   };
@@ -325,6 +345,8 @@ export default function Pipeline() {
       proxima_acao_tipo: deal.proxima_acao?.tipo || '',
       proxima_acao_descricao: deal.proxima_acao?.descricao || '',
       proxima_acao_data_hora: toDateTimeLocalValue(deal.proxima_acao?.data_hora),
+      proxima_acao_responsavel: deal.proxima_acao?.responsavel || '',
+      proxima_acao_canal: deal.proxima_acao?.canal || '',
     });
     setCadence(null);
     setCadenceNote('');
@@ -401,6 +423,15 @@ export default function Pipeline() {
     try {
       setIsSavingChecklist(true);
       await leadsAPI.update(lead.id, buildLeadUpdatePayload(lead, checklistPayload));
+
+      if (stageRequiresNextAction(pendingStageChange.toStage)) {
+        setIsChecklistModalOpen(false);
+        openMoveActionModal(pendingStageChange.deal, pendingStageChange.toStage);
+        setPendingStageChange(null);
+        toast.success('Checklist salvo! Defina a próxima ação para concluir a movimentação.');
+        return;
+      }
+
       await dealsAPI.update(pendingStageChange.deal.id, {
         ...pendingStageChange.deal,
         etapa: pendingStageChange.toStage,
@@ -465,6 +496,50 @@ export default function Pipeline() {
     }
   };
 
+
+  const handleMoveActionFieldChange = (event) => {
+    const { name, value } = event.target;
+    setMoveActionFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleMoveWithNextAction = async (event) => {
+    event.preventDefault();
+    if (!pendingMoveAction) return;
+
+    if (!moveActionFormData.tipo.trim() || !moveActionFormData.data_hora || !moveActionFormData.responsavel.trim() || !moveActionFormData.canal.trim()) {
+      toast.error('Preencha tipo, data/hora, responsável e canal para mover o card.');
+      return;
+    }
+
+    try {
+      setIsSavingMoveAction(true);
+      await dealsAPI.update(pendingMoveAction.deal.id, {
+        ...pendingMoveAction.deal,
+        etapa: pendingMoveAction.toStage,
+        proxima_acao: {
+          tipo: moveActionFormData.tipo.trim(),
+          data_hora: moveActionFormData.data_hora,
+          responsavel: moveActionFormData.responsavel.trim(),
+          canal: moveActionFormData.canal,
+          descricao: moveActionFormData.descricao.trim() || null,
+        },
+      });
+
+      await fetchData();
+      setIsMoveActionModalOpen(false);
+      setPendingMoveAction(null);
+      toast.success('Card movido com próxima ação registrada.');
+    } catch (error) {
+      console.error('Error moving deal with next action', error);
+      toast.error('Erro ao salvar próxima ação e mover card.');
+    } finally {
+      setIsSavingMoveAction(false);
+    }
+  };
+
   const handleUpdateDeal = async (event) => {
     event.preventDefault();
 
@@ -479,7 +554,7 @@ export default function Pipeline() {
       }
     }
 
-    const isNextActionRequired = dealFormData.etapa === 'Proposta Enviada' || dealFormData.etapa === 'Negociação';
+    const isNextActionRequired = stageRequiresNextAction(dealFormData.etapa);
     const hasAnyNextActionField =
       dealFormData.proxima_acao_tipo.trim()
       || dealFormData.proxima_acao_descricao.trim()
@@ -490,8 +565,8 @@ export default function Pipeline() {
       return;
     }
 
-    if (hasAnyNextActionField && (!dealFormData.proxima_acao_tipo.trim() || !dealFormData.proxima_acao_descricao.trim() || !dealFormData.proxima_acao_data_hora)) {
-      toast.error('Preencha tipo, descrição e data da próxima ação');
+    if (hasAnyNextActionField && (!dealFormData.proxima_acao_tipo.trim() || !dealFormData.proxima_acao_data_hora || !dealFormData.proxima_acao_responsavel.trim() || !dealFormData.proxima_acao_canal.trim())) {
+      toast.error('Preencha tipo, data, responsável e canal da próxima ação');
       return;
     }
 
@@ -502,8 +577,10 @@ export default function Pipeline() {
       proxima_acao: hasAnyNextActionField
         ? {
           tipo: dealFormData.proxima_acao_tipo.trim(),
-          descricao: dealFormData.proxima_acao_descricao.trim(),
+          descricao: dealFormData.proxima_acao_descricao.trim() || null,
           data_hora: dealFormData.proxima_acao_data_hora,
+          responsavel: dealFormData.proxima_acao_responsavel.trim(),
+          canal: dealFormData.proxima_acao_canal,
         }
         : null,
     };
@@ -781,6 +858,60 @@ export default function Pipeline() {
         </div>
       </DragDropContext>
 
+
+      <Dialog
+        open={isMoveActionModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingMoveAction(null);
+          }
+          setIsMoveActionModalOpen(open);
+        }}
+      >
+        <DialogContent className="bg-brand-gray border-white/10 text-white max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Defina a próxima ação para mover o card</DialogTitle>
+            <DialogDescription className="text-white/60">
+              Para concluir a movimentação, informe tipo, data/hora, responsável e canal.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleMoveWithNextAction} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="move_tipo" className="text-white">Próxima ação</Label>
+              <Input id="move_tipo" name="tipo" value={moveActionFormData.tipo} onChange={handleMoveActionFieldChange} className="bg-black/30 border-white/10 text-white" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="move_data_hora" className="text-white">Data e hora</Label>
+              <Input id="move_data_hora" name="data_hora" type="datetime-local" value={moveActionFormData.data_hora} onChange={handleMoveActionFieldChange} className="bg-black/30 border-white/10 text-white" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="move_responsavel" className="text-white">Responsável</Label>
+              <Input id="move_responsavel" name="responsavel" value={moveActionFormData.responsavel} onChange={handleMoveActionFieldChange} className="bg-black/30 border-white/10 text-white" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="move_canal" className="text-white">Canal</Label>
+              <select id="move_canal" name="canal" value={moveActionFormData.canal} onChange={handleMoveActionFieldChange} className="w-full h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white" required>
+                {['WhatsApp', 'Ligação', 'Meet', 'Visita', 'Interno'].map((canal) => (
+                  <option key={canal} value={canal} className="bg-brand-gray text-white">{canal}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="move_descricao" className="text-white">Observação (opcional)</Label>
+              <Textarea id="move_descricao" name="descricao" value={moveActionFormData.descricao} onChange={handleMoveActionFieldChange} rows={3} className="bg-black/30 border-white/10 text-white" />
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => { setIsMoveActionModalOpen(false); setPendingMoveAction(null); }} disabled={isSavingMoveAction}>Cancelar</Button>
+              <Button type="submit" className="bg-brand-yellow text-black hover:bg-brand-yellow/90 font-bold" disabled={isSavingMoveAction}>
+                {isSavingMoveAction ? 'Salvando...' : 'Salvar e mover'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isChecklistModalOpen} onOpenChange={setIsChecklistModalOpen}>
         <DialogContent className="bg-brand-gray border-white/10 text-white sm:max-w-xl">
           <DialogHeader>
@@ -983,9 +1114,36 @@ export default function Pipeline() {
                   className="bg-black/30 border-white/10 text-white"
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="proxima_acao_responsavel" className="text-white">Responsável</Label>
+                <Input
+                  id="proxima_acao_responsavel"
+                  name="proxima_acao_responsavel"
+                  value={dealFormData.proxima_acao_responsavel}
+                  onChange={handleEditFieldChange}
+                  placeholder="Nome do responsável"
+                  className="bg-black/30 border-white/10 text-white"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="proxima_acao_canal" className="text-white">Canal</Label>
+                <select
+                  id="proxima_acao_canal"
+                  name="proxima_acao_canal"
+                  value={dealFormData.proxima_acao_canal}
+                  onChange={handleEditFieldChange}
+                  className="w-full h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white"
+                >
+                  {['WhatsApp', 'Ligação', 'Meet', 'Visita', 'Interno'].map((canal) => (
+                    <option key={canal} value={canal} className="bg-brand-gray text-white">{canal}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            {(dealInEdition?.etapa === 'Proposta Enviada' || dealInEdition?.etapa === 'Negociação' || dealFormData.etapa === 'Proposta Enviada' || dealFormData.etapa === 'Negociação') && (
+            {stageRequiresNextAction(dealFormData.etapa) && (
               <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-brand-yellow">Cadência de Follow-up</h4>

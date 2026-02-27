@@ -232,12 +232,17 @@ def gerar_link_whatsapp(telefone: str, mensagem: str = '') -> str:
 
 def validar_proxima_acao(etapa: str, proxima_acao: dict = None) -> bool:
     """Valida se próxima ação é obrigatória para a etapa"""
-    etapas_requerem_proxima_acao = ['Proposta Enviada', 'Negociação']
+    etapas_nao_requerem_proxima_acao = ['Fechado - Ganho', 'Fechado - Perdido', 'Nutrição (Lead C)']
     
-    if etapa in etapas_requerem_proxima_acao:
+    if etapa not in etapas_nao_requerem_proxima_acao:
         if not proxima_acao:
             return False
-        if not proxima_acao.get('data_hora') or not proxima_acao.get('tipo'):
+        if (
+            not proxima_acao.get('data_hora')
+            or not proxima_acao.get('tipo')
+            or not proxima_acao.get('responsavel')
+            or not proxima_acao.get('canal')
+        ):
             return False
     
     return True

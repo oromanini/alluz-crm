@@ -488,7 +488,7 @@ async def update_deal(
     if not validar_proxima_acao(deal_data.etapa, proxima_acao_dict):
         raise HTTPException(
             status_code=400,
-            detail="Pr\u00f3xima a\u00e7\u00e3o \u00e9 obrigat\u00f3ria para esta etapa (Proposta Enviada/Negocia\u00e7\u00e3o)"
+            detail="Próxima ação é obrigatória para mudança de etapa (exceto Fechado/Nutrição)"
         )
 
     if (
