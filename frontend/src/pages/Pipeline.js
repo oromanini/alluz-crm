@@ -701,7 +701,7 @@ export default function Pipeline() {
 
                                   <TooltipProvider delayDuration={200}>
                                     <div className="flex items-center gap-1 pt-2 border-t border-white/5">
-                                      {deal.etapa === 'Lead Novo' && (
+                                      {deal.etapa === 'Contato Realizado' && (
                                         <Tooltip>
                                           <TooltipTrigger asChild>
                                             <Button
