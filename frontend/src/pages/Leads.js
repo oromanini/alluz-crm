@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { leadsAPI } from '../lib/api';
+import React, { useState, useEffect, useMemo } from 'react';
+import { leadsAPI, dealsAPI, appointmentsAPI } from '../lib/api';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -16,6 +16,12 @@ import {
 } from '../components/ui/dialog';
 import { Phone, Mail, MapPin, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
+
+const SLA_TARGETS = {
+  speedToLeadMinutes: 10,
+  timeToMeetHours: 24,
+  timeToVisitHours: 48,
+};
 
 const initialLeadForm = {
   nome: '',
@@ -64,6 +70,36 @@ const formatLeadValue = (value) => {
   return String(value);
 };
 
+const getDiffInMinutes = (startDate, endDate) => {
+  if (!startDate || !endDate) return null;
+  const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime();
+  if (Number.isNaN(diffMs)) return null;
+  return Math.max(Math.round(diffMs / 60000), 0);
+};
+
+const formatDuration = (minutes) => {
+  if (minutes === null || minutes === undefined) return '—';
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (!remainingMinutes) return `${hours}h`;
+  return `${hours}h ${remainingMinutes}min`;
+};
+
+const getSlaBadgeStyle = (status) => {
+  if (status === 'dentro') return 'bg-green-500/10 text-green-400 border-green-500/20';
+  if (status === 'fora') return 'bg-red-500/10 text-red-400 border-red-500/20';
+  if (status === 'nao_aplica') return 'bg-slate-500/10 text-slate-300 border-slate-500/20';
+  return 'bg-amber-500/10 text-amber-300 border-amber-500/20';
+};
+
+const getSlaLabel = (status) => {
+  if (status === 'dentro') return 'Dentro do SLA';
+  if (status === 'fora') return 'Fora do SLA';
+  if (status === 'nao_aplica') return 'Não se aplica';
+  return 'Pendente';
+};
+
 export default function Leads() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -71,6 +107,8 @@ export default function Leads() {
   const [isCreatingLead, setIsCreatingLead] = useState(false);
   const [leadFormData, setLeadFormData] = useState(initialLeadForm);
   const [selectedLead, setSelectedLead] = useState(null);
+  const [deals, setDeals] = useState([]);
+  const [appointments, setAppointments] = useState([]);
 
   useEffect(() => {
     fetchLeads();
@@ -78,8 +116,15 @@ export default function Leads() {
 
   const fetchLeads = async () => {
     try {
-      const response = await leadsAPI.list();
-      setLeads(response.data);
+      const [leadsResponse, dealsResponse, appointmentsResponse] = await Promise.all([
+        leadsAPI.list(),
+        dealsAPI.list(),
+        appointmentsAPI.list(),
+      ]);
+
+      setLeads(leadsResponse.data);
+      setDeals(dealsResponse.data);
+      setAppointments(appointmentsResponse.data);
     } catch (error) {
       console.error('Error fetching leads', error);
       toast.error('Erro ao carregar leads');
@@ -96,6 +141,70 @@ export default function Leads() {
     };
     return styles[classificacao] || '';
   };
+
+  const slaByLeadId = useMemo(() => leads.reduce((acc, lead) => {
+    const leadAppointments = appointments.filter((apt) => apt.lead_id === lead.id);
+    const leadDeal = deals.find((deal) => deal.lead_id === lead.id);
+
+    const firstMeet = leadAppointments
+      .filter((apt) => apt.tipo === 'meet')
+      .sort((a, b) => new Date(a.created_at || a.data_hora).getTime() - new Date(b.created_at || b.data_hora).getTime())[0];
+
+    const firstVisit = leadAppointments
+      .filter((apt) => apt.tipo === 'visita')
+      .sort((a, b) => new Date(a.created_at || a.data_hora).getTime() - new Date(b.created_at || b.data_hora).getTime())[0];
+
+    const speedToLeadMinutes = lead.status_sla_minutos ?? getDiffInMinutes(lead.created_at, lead.primeiro_contato_em);
+    const speedStatus = lead.ignorar_speed_to_lead
+      ? 'nao_aplica'
+      : speedToLeadMinutes === null
+        ? 'pendente'
+        : speedToLeadMinutes <= SLA_TARGETS.speedToLeadMinutes ? 'dentro' : 'fora';
+
+    const isMeetApplicable = lead.classificacao === 'A' || lead.classificacao === 'B';
+    const meetMinutes = firstMeet ? getDiffInMinutes(lead.created_at, firstMeet.created_at || firstMeet.data_hora) : null;
+    const meetStatus = !isMeetApplicable
+      ? 'nao_aplica'
+      : meetMinutes === null
+        ? 'pendente'
+        : meetMinutes <= SLA_TARGETS.timeToMeetHours * 60 ? 'dentro' : 'fora';
+
+    const isVisitApplicable = lead.classificacao === 'A';
+    const visitStartAt = leadDeal?.etapa === 'Visita Agendada' || leadDeal?.etapa === 'Visita Realizada'
+      ? leadDeal.updated_at
+      : null;
+    const visitMinutes = firstVisit && visitStartAt ? getDiffInMinutes(visitStartAt, firstVisit.created_at || firstVisit.data_hora) : null;
+    const visitStatus = !isVisitApplicable
+      ? 'nao_aplica'
+      : !visitStartAt
+        ? 'pendente'
+        : visitMinutes === null
+          ? 'pendente'
+          : visitMinutes <= SLA_TARGETS.timeToVisitHours * 60 ? 'dentro' : 'fora';
+
+    acc[lead.id] = {
+      speed: {
+        status: speedStatus,
+        elapsed: speedToLeadMinutes,
+        meta: `${SLA_TARGETS.speedToLeadMinutes} min`,
+        title: 'SLA #1 • Speed-to-lead',
+      },
+      meet: {
+        status: meetStatus,
+        elapsed: meetMinutes,
+        meta: `${SLA_TARGETS.timeToMeetHours}h`,
+        title: 'SLA #2 • Time-to-meet',
+      },
+      visit: {
+        status: visitStatus,
+        elapsed: visitMinutes,
+        meta: `${SLA_TARGETS.timeToVisitHours}h`,
+        title: 'SLA #3 • Time-to-visit',
+      },
+    };
+
+    return acc;
+  }, {}), [appointments, deals, leads]);
 
   const handleFieldChange = (event) => {
     const { name, value, type, checked } = event.target;
@@ -324,7 +433,7 @@ export default function Leads() {
       </Dialog>
 
       <Dialog open={Boolean(selectedLead)} onOpenChange={(isOpen) => { if (!isOpen) setSelectedLead(null); }}>
-        <DialogContent className="bg-brand-gray border-white/10 text-white sm:max-w-2xl">
+        <DialogContent className="bg-brand-gray border-white/10 text-white sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="text-white">Detalhes do lead</DialogTitle>
             <DialogDescription className="text-white/60">
@@ -333,24 +442,45 @@ export default function Leads() {
           </DialogHeader>
 
           {selectedLead && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-              <div><span className="text-white/60">Nome:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.nome)}</span></div>
-              <div><span className="text-white/60">Telefone:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.telefone)}</span></div>
-              <div><span className="text-white/60">Email:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.email)}</span></div>
-              <div><span className="text-white/60">Cidade:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.cidade)}</span></div>
-              <div><span className="text-white/60">Bairro:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.bairro)}</span></div>
-              <div><span className="text-white/60">Origem:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.origem)}</span></div>
-              <div><span className="text-white/60">Classificação:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.classificacao)}</span></div>
-              <div><span className="text-white/60">Conta média:</span> <span className="text-white font-medium">{selectedLead.conta_media ? `R$ ${selectedLead.conta_media}` : 'Não informado'}</span></div>
-              <div><span className="text-white/60">Ignorar Speed-to-Lead:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.ignorar_speed_to_lead)}</span></div>
-              <div><span className="text-white/60">Criado em:</span> <span className="text-white font-medium">{selectedLead.created_at ? new Date(selectedLead.created_at).toLocaleString('pt-BR') : 'Não informado'}</span></div>
-              <div><span className="text-white/60">Atualizado em:</span> <span className="text-white font-medium">{selectedLead.updated_at ? new Date(selectedLead.updated_at).toLocaleString('pt-BR') : 'Não informado'}</span></div>
-              <div><span className="text-white/60">Decisão em até 30 dias:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.decisao_em_ate_30_dias)}</span></div>
-              <div><span className="text-white/60">Enviou foto da fatura:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.enviou_foto_fatura)}</span></div>
-              <div><span className="text-white/60">Enviou foto do telhado:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.enviou_foto_telhado)}</span></div>
-              <div><span className="text-white/60">Apenas pesquisando:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.apenas_pesquisando)}</span></div>
-              <div><span className="text-white/60">Imóvel próprio:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.imovel_proprio)}</span></div>
-              <div><span className="text-white/60">Possui área útil necessária:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.possui_area_util_necessaria)}</span></div>
+            <div className="space-y-5">
+              <div className="rounded-lg border border-white/10 bg-black/20 p-4 space-y-2">
+                <h3 className="font-semibold text-white">Painel de SLA do lead</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                  {Object.values(slaByLeadId[selectedLead.id] || {}).map((slaItem) => (
+                    <div key={slaItem.title} className="rounded-md border border-white/10 p-3 bg-black/20">
+                      <p className="text-white/70 mb-1">{slaItem.title}</p>
+                      <Badge className={`border text-[10px] font-semibold mb-1 ${getSlaBadgeStyle(slaItem.status)}`}>
+                        {getSlaLabel(slaItem.status)}
+                      </Badge>
+                      <p className="text-white/80">Tempo: {formatDuration(slaItem.elapsed)}</p>
+                      <p className="text-white/50">Meta: {slaItem.meta}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-white/50">
+                  SLA #3 considera exceção de disponibilidade do cliente e deve ser tratado operacionalmente quando necessário.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div><span className="text-white/60">Nome:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.nome)}</span></div>
+                <div><span className="text-white/60">Telefone:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.telefone)}</span></div>
+                <div><span className="text-white/60">Email:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.email)}</span></div>
+                <div><span className="text-white/60">Cidade:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.cidade)}</span></div>
+                <div><span className="text-white/60">Bairro:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.bairro)}</span></div>
+                <div><span className="text-white/60">Origem:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.origem)}</span></div>
+                <div><span className="text-white/60">Classificação:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.classificacao)}</span></div>
+                <div><span className="text-white/60">Conta média:</span> <span className="text-white font-medium">{selectedLead.conta_media ? `R$ ${selectedLead.conta_media}` : 'Não informado'}</span></div>
+                <div><span className="text-white/60">Ignorar Speed-to-Lead:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.ignorar_speed_to_lead)}</span></div>
+                <div><span className="text-white/60">Criado em:</span> <span className="text-white font-medium">{selectedLead.created_at ? new Date(selectedLead.created_at).toLocaleString('pt-BR') : 'Não informado'}</span></div>
+                <div><span className="text-white/60">Atualizado em:</span> <span className="text-white font-medium">{selectedLead.updated_at ? new Date(selectedLead.updated_at).toLocaleString('pt-BR') : 'Não informado'}</span></div>
+                <div><span className="text-white/60">Decisão em até 30 dias:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.decisao_em_ate_30_dias)}</span></div>
+                <div><span className="text-white/60">Enviou foto da fatura:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.enviou_foto_fatura)}</span></div>
+                <div><span className="text-white/60">Enviou foto do telhado:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.enviou_foto_telhado)}</span></div>
+                <div><span className="text-white/60">Apenas pesquisando:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.apenas_pesquisando)}</span></div>
+                <div><span className="text-white/60">Imóvel próprio:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.imovel_proprio)}</span></div>
+                <div><span className="text-white/60">Possui área útil necessária:</span> <span className="text-white font-medium">{formatLeadValue(selectedLead.possui_area_util_necessaria)}</span></div>
+              </div>
             </div>
           )}
 
@@ -397,6 +527,17 @@ export default function Leads() {
                 </div>
 
                 <div className="space-y-2 text-sm text-white/60">
+                  <div className="space-y-1 rounded-md border border-white/5 bg-black/20 p-2">
+                    {Object.values(slaByLeadId[lead.id] || {}).map((slaItem) => (
+                      <div key={slaItem.title} className="flex items-center justify-between gap-2 text-[11px]">
+                        <span className="text-white/60">{slaItem.title}</span>
+                        <Badge className={`border text-[10px] font-semibold ${getSlaBadgeStyle(slaItem.status)}`}>
+                          {getSlaLabel(slaItem.status)} · {formatDuration(slaItem.elapsed)} / {slaItem.meta}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+
                   <div className="flex items-center gap-2">
                     <Phone className="w-4 h-4" />
                     <span className="font-mono">{lead.telefone}</span>
