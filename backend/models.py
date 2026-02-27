@@ -71,7 +71,9 @@ class NextAction(BaseModel):
     
     data_hora: datetime
     tipo: str
-    descricao: str
+    descricao: Optional[str] = None
+    responsavel: Optional[str] = None
+    canal: Optional[str] = None
 
 
 class UserBase(BaseModel):
