@@ -11,6 +11,7 @@ import Agenda from './pages/Agenda';
 import Propostas from './pages/Propostas';
 import Relatorios from './pages/Relatorios';
 import Configuracoes from './pages/Configuracoes';
+import Aprendizado from './pages/Aprendizado';
 import { LoadingSpinner } from './components/ui/loading-spinner';
 import './index.css';
 
@@ -50,6 +51,7 @@ function AppRoutes() {
         <Route path="agenda" element={<Agenda />} />
         <Route path="propostas" element={<Propostas />} />
         <Route path="relatorios" element={<Relatorios />} />
+        <Route path="aprendizado" element={<Aprendizado />} />
         <Route path="configuracoes" element={<Configuracoes />} />
       </Route>
     </Routes>

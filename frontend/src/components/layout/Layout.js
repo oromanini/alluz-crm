@@ -9,6 +9,7 @@ import {
   Calendar,
   FileText,
   BarChart3,
+  GraduationCap,
   Settings,
   LogOut,
   Bell,
@@ -34,6 +35,7 @@ export default function Layout() {
     { to: '/agenda', icon: Calendar, label: 'Agenda' },
     { to: '/propostas', icon: FileText, label: 'Propostas' },
     { to: '/relatorios', icon: BarChart3, label: 'Relatórios' },
+    { to: '/aprendizado', icon: GraduationCap, label: 'Aprendizado' },
     { to: '/configuracoes', icon: Settings, label: 'Configurações', adminOnly: true },
   ];
 
