@@ -8,13 +8,13 @@ export default function Aprendizado() {
         <p className="text-white/60">Acesse os materiais de treinamento da equipe</p>
       </div>
 
-      <div style={{ width: 640, height: 480, margin: 10, position: 'relative' }}>
+      <div className="w-full max-w-none h-[70vh] min-h-[520px]">
         <iframe
           allowFullScreen
           frameBorder="0"
           id="AkLA3IvVp_cL"
           src="https://lucid.app/documents/embedded/b7cd71e0-2857-45bd-b3bf-ace00db8255e"
-          style={{ width: 640, height: 480 }}
+          className="w-full h-full"
           title="Conteúdo de Aprendizado"
         />
       </div>
