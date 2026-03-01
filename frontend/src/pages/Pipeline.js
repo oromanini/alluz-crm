@@ -164,6 +164,7 @@ export default function Pipeline() {
     proxima_acao_canal: '',
   });
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
+  const [isMoveBlockedModalOpen, setIsMoveBlockedModalOpen] = useState(false);
   const [isSavingChecklist, setIsSavingChecklist] = useState(false);
   const [checklistFormData, setChecklistFormData] = useState(initialChecklistState);
   const [pendingStageChange, setPendingStageChange] = useState(null);
@@ -184,6 +185,10 @@ export default function Pipeline() {
   const [leadFormData, setLeadFormData] = useState(buildLeadFormData({}));
   const [isSavingLead, setIsSavingLead] = useState(false);
   const [isArchivingLead, setIsArchivingLead] = useState(false);
+
+  const showChecklistRequiredModal = () => {
+    setIsMoveBlockedModalOpen(true);
+  };
 
   useEffect(() => {
     fetchData();
@@ -293,8 +298,7 @@ export default function Pipeline() {
     if (deal.etapa === 'Contato Realizado' && newEtapa === 'Qualificado') {
       const lead = leadsMap[deal.lead_id];
       if (!hasChecklistCompleted(lead)) {
-        openChecklistModal(deal, newEtapa, 'drag');
-        toast.error('Preencha o checklist antes de mover o lead para Qualificado.');
+        showChecklistRequiredModal();
         return;
       }
     }
@@ -548,8 +552,7 @@ export default function Pipeline() {
     if (dealInEdition.etapa === 'Contato Realizado' && dealFormData.etapa === 'Qualificado') {
       const lead = leadsMap[dealInEdition.lead_id];
       if (!hasChecklistCompleted(lead)) {
-        openChecklistModal(dealInEdition, dealFormData.etapa, 'edit');
-        toast.error('Preencha o checklist antes de mover o lead para Qualificado.');
+        showChecklistRequiredModal();
         return;
       }
     }
@@ -961,6 +964,27 @@ export default function Pipeline() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isMoveBlockedModalOpen} onOpenChange={setIsMoveBlockedModalOpen}>
+        <DialogContent className="bg-brand-gray border-white/10 text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">Movimentação bloqueada</DialogTitle>
+            <DialogDescription className="text-white/70">
+              Preencha o checklist de qualificação antes de mover o lead de Contato Realizado para Qualificado.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              className="bg-brand-yellow text-black hover:bg-brand-yellow/90 font-bold"
+              onClick={() => setIsMoveBlockedModalOpen(false)}
+            >
+              Entendi
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
