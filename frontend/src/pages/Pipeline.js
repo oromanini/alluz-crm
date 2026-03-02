@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { dealsAPI, leadsAPI, followUpCadenceAPI } from '../lib/api';
+import { dealsAPI, leadsAPI } from '../lib/api';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -23,7 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
-import { Phone, MessageCircle, Calendar, AlertCircle, Pencil, Pause, Play, Check } from 'lucide-react';
+import { Phone, MessageCircle, Calendar, Pencil, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
 const PIPELINE_STAGES = [
@@ -133,6 +133,30 @@ const parseCurrencyMaskToNumber = (value) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
+const formatSlaStatus = (minutes) => {
+  if (minutes === null || minutes === undefined) {
+    return {
+      title: 'Aguardando primeiro contato',
+      tone: 'text-white/70',
+      detail: 'Mova para Contato Realizado para medir o objetivo de 10 minutos.',
+    };
+  }
+
+  if (minutes <= 10) {
+    return {
+      title: 'Objetivo cumprido',
+      tone: 'text-emerald-400',
+      detail: `Lead avançou em ${minutes} min (meta: até 10 min).`,
+    };
+  }
+
+  return {
+    title: 'Objetivo fora da meta',
+    tone: 'text-amber-400',
+    detail: `Lead avançou em ${minutes} min (meta: até 10 min).`,
+  };
+};
+
 const buildLeadFormData = (lead) => ({
   nome: lead.nome || '',
   telefone: formatPhoneMask(lead.telefone || ''),
@@ -178,10 +202,6 @@ export default function Pipeline() {
     canal: 'WhatsApp',
     descricao: '',
   });
-  const [cadence, setCadence] = useState(null);
-  const [cadenceLoading, setCadenceLoading] = useState(false);
-  const [cadenceNote, setCadenceNote] = useState('');
-  const [cadenceChannel, setCadenceChannel] = useState('whatsapp');
   const [leadFormData, setLeadFormData] = useState(buildLeadFormData({}));
   const [isSavingLead, setIsSavingLead] = useState(false);
   const [isArchivingLead, setIsArchivingLead] = useState(false);
@@ -330,10 +350,6 @@ export default function Pipeline() {
 
   const getDealsByStage = (stage) => dealsByStage[stage] || [];
 
-  const isProximaAcaoVencida = (proxima_acao) => {
-    if (!proxima_acao || !proxima_acao.data_hora) return false;
-    return new Date(proxima_acao.data_hora) < new Date();
-  };
 
   const openEditModal = async (deal, forcedEtapa = null) => {
     const lead = leadsMap[deal.lead_id];
@@ -345,35 +361,28 @@ export default function Pipeline() {
     setDealInEdition(deal);
     setDealFormData({
       etapa: forcedEtapa || deal.etapa,
-      valor_estimado: deal.valor_estimado || '',
+      valor_estimado: deal.valor_estimado
+        ? Number(deal.valor_estimado).toLocaleString('pt-BR', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
+        : '',
       proxima_acao_tipo: deal.proxima_acao?.tipo || '',
       proxima_acao_descricao: deal.proxima_acao?.descricao || '',
       proxima_acao_data_hora: toDateTimeLocalValue(deal.proxima_acao?.data_hora),
       proxima_acao_responsavel: deal.proxima_acao?.responsavel || '',
       proxima_acao_canal: deal.proxima_acao?.canal || '',
     });
-    setCadence(null);
-    setCadenceNote('');
-    setCadenceChannel('whatsapp');
     setLeadFormData(buildLeadFormData(lead));
     setIsEditModalOpen(true);
-
-    try {
-      setCadenceLoading(true);
-      const response = await followUpCadenceAPI.get(deal.id);
-      setCadence(response.data);
-    } catch (error) {
-      console.error('Error loading follow-up cadence', error);
-    } finally {
-      setCadenceLoading(false);
-    }
   };
 
   const handleEditFieldChange = (event) => {
     const { name, value } = event.target;
+    const normalizedValue = name === 'valor_estimado' ? formatCurrencyMask(value) : value;
     setDealFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: normalizedValue,
     }));
   };
 
@@ -459,48 +468,6 @@ export default function Pipeline() {
     }
   };
 
-  const refreshCadence = async () => {
-    if (!dealInEdition) return;
-    const response = await followUpCadenceAPI.get(dealInEdition.id);
-    setCadence(response.data);
-  };
-
-  const toggleCadenceStatus = async () => {
-    if (!dealInEdition || !cadence) return;
-    try {
-      if (cadence.status === 'ativa') {
-        await followUpCadenceAPI.pause(dealInEdition.id);
-        toast.success('Cadência pausada');
-      } else {
-        await followUpCadenceAPI.resume(dealInEdition.id);
-        toast.success('Cadência retomada');
-      }
-      await refreshCadence();
-    } catch (error) {
-      console.error('Error toggling cadence status', error);
-      toast.error('Erro ao atualizar status da cadência');
-    }
-  };
-
-  const registerCadenceAttempt = async (dia, complete = false) => {
-    if (!dealInEdition) return;
-    try {
-      if (complete) {
-        await followUpCadenceAPI.complete(dealInEdition.id, dia, { canal: cadenceChannel, notas: cadenceNote });
-        toast.success(`Tarefa D${dia} concluída`);
-      } else {
-        await followUpCadenceAPI.attempt(dealInEdition.id, dia, { canal: cadenceChannel, notas: cadenceNote });
-        toast.success(`Tentativa registrada na tarefa D${dia}`);
-      }
-      setCadenceNote('');
-      await refreshCadence();
-    } catch (error) {
-      console.error('Error updating cadence task', error);
-      toast.error('Erro ao atualizar tarefa da cadência');
-    }
-  };
-
-
   const handleMoveActionFieldChange = (event) => {
     const { name, value } = event.target;
     setMoveActionFormData((prev) => ({
@@ -557,7 +524,8 @@ export default function Pipeline() {
       }
     }
 
-    const isNextActionRequired = stageRequiresNextAction(dealFormData.etapa);
+    const isStageChanging = dealFormData.etapa !== dealInEdition.etapa;
+    const isNextActionRequired = isStageChanging && stageRequiresNextAction(dealFormData.etapa);
     const hasAnyNextActionField =
       dealFormData.proxima_acao_tipo.trim()
       || dealFormData.proxima_acao_descricao.trim()
@@ -576,7 +544,7 @@ export default function Pipeline() {
     const payload = {
       ...dealInEdition,
       etapa: dealFormData.etapa,
-      valor_estimado: dealFormData.valor_estimado ? Number(dealFormData.valor_estimado) : null,
+      valor_estimado: parseCurrencyMaskToNumber(dealFormData.valor_estimado),
       proxima_acao: hasAnyNextActionField
         ? {
           tipo: dealFormData.proxima_acao_tipo.trim(),
@@ -668,6 +636,9 @@ export default function Pipeline() {
       setIsArchivingLead(false);
     }
   };
+
+  const leadInEdition = dealInEdition ? leadsMap[dealInEdition.lead_id] : null;
+  const slaInfo = formatSlaStatus(leadInEdition?.status_sla_minutos);
 
   if (loading) {
     return (
@@ -763,19 +734,6 @@ export default function Pipeline() {
                                   {deal.valor_estimado && (
                                     <div className="text-xs text-white/60">
                                       Valor: <span className="font-mono font-bold text-brand-gold">R$ {deal.valor_estimado.toLocaleString('pt-BR')}</span>
-                                    </div>
-                                  )}
-
-                                  {deal.proxima_acao && (
-                                    <div className={`text-xs p-2 rounded-md border ${isProximaAcaoVencida(deal.proxima_acao) ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-brand-yellow/10 border-brand-yellow/20 text-brand-yellow'}`}>
-                                      <div className="flex items-center gap-1 font-bold">
-                                        {isProximaAcaoVencida(deal.proxima_acao) && <AlertCircle className="w-3 h-3" />}
-                                        <span>Próxima ação:</span>
-                                      </div>
-                                      <div className="mt-1">{deal.proxima_acao.tipo}</div>
-                                      <div className="font-mono text-xs opacity-80">
-                                        {new Date(deal.proxima_acao.data_hora).toLocaleString('pt-BR')}
-                                      </div>
                                     </div>
                                   )}
 
@@ -1090,12 +1048,10 @@ export default function Pipeline() {
               <Input
                 id="valor_estimado"
                 name="valor_estimado"
-                type="number"
-                min="0"
-                step="0.01"
                 value={dealFormData.valor_estimado}
                 onChange={handleEditFieldChange}
                 className="bg-black/30 border-white/10 text-white"
+                placeholder="0,00"
               />
             </div>
 
@@ -1167,73 +1123,18 @@ export default function Pipeline() {
               </div>
             </div>
 
+            <div className="border border-white/10 rounded-lg p-3 space-y-1 bg-black/20">
+              <h4 className="text-sm font-semibold text-brand-yellow">Cadência por movimentação de coluna</h4>
+              <p className={`text-sm font-semibold ${slaInfo.tone}`}>{slaInfo.title}</p>
+              <p className="text-xs text-white/70">{slaInfo.detail}</p>
+            </div>
+
             {stageRequiresNextAction(dealFormData.etapa) && (
               <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-brand-yellow">Cadência de Follow-up</h4>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="text-white hover:bg-white/10"
-                    onClick={toggleCadenceStatus}
-                    disabled={!cadence || cadenceLoading}
-                  >
-                    {cadence?.status === 'ativa' ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
-                    {cadence?.status === 'ativa' ? 'Pausar' : 'Retomar'}
-                  </Button>
-                </div>
-
-                {cadenceLoading ? (
-                  <div className="flex justify-center py-2"><LoadingSpinner size={16} /></div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <div className="space-y-2">
-                        <Label className="text-white">Canal da tentativa</Label>
-                        <select
-                          value={cadenceChannel}
-                          onChange={(e) => setCadenceChannel(e.target.value)}
-                          className="w-full h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white"
-                        >
-                          <option value="whatsapp" className="bg-brand-gray text-white">WhatsApp</option>
-                          <option value="ligacao" className="bg-brand-gray text-white">Ligação</option>
-                          <option value="email" className="bg-brand-gray text-white">Email</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-white">Notas da tentativa</Label>
-                        <Input
-                          value={cadenceNote}
-                          onChange={(e) => setCadenceNote(e.target.value)}
-                          className="bg-black/30 border-white/10 text-white"
-                          placeholder="Ex.: cliente pediu retorno amanhã"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 max-h-56 overflow-auto pr-1">
-                      {(cadence?.tarefas || []).map((task) => (
-                        <div key={task.dia} className="border border-white/10 rounded-md p-2 bg-black/30">
-                          <div className="flex items-center justify-between gap-2">
-                            <div>
-                              <p className="text-xs text-white/70">D{task.dia} • {task.tipo}</p>
-                              <p className="text-sm text-white">{task.mensagem}</p>
-                              <p className="text-xs text-white/60">Status: {task.status} • Tentativas: {task.tentativas || 0}</p>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button type="button" size="sm" variant="outline" className="border-white/10 text-white" onClick={() => registerCadenceAttempt(task.dia, false)}>
-                                Registrar
-                              </Button>
-                              <Button type="button" size="sm" className="bg-brand-yellow text-black hover:bg-brand-yellow/90" onClick={() => registerCadenceAttempt(task.dia, true)}>
-                                <Check className="h-3 w-3 mr-1" /> Concluir
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
+                <h4 className="text-sm font-semibold text-brand-yellow">Regra de movimentação</h4>
+                <p className="text-xs text-white/70">
+                  Ao mudar de coluna, é obrigatório definir a próxima ação (tipo, data/hora, responsável e canal), exceto em Fechado e Nutrição.
+                </p>
               </div>
             )}
 
