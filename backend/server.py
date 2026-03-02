@@ -1141,16 +1141,10 @@ async def root():
 # Include the router in the main app
 app.include_router(api_router)
 
-configured_origins = [origin.strip() for origin in os.environ.get('CORS_ORIGINS', '*').split(',') if origin.strip()]
-allow_all_origins = '*' in configured_origins
-
 app.add_middleware(
     CORSMiddleware,
-    # Browsers reject credentialed CORS responses when Access-Control-Allow-Origin is '*'.
-    # Keeping credentials disabled in wildcard mode avoids requests succeeding on the server
-    # while the frontend still receives a network-level "Failed to fetch" error.
-    allow_credentials=not allow_all_origins,
-    allow_origins=configured_origins or ['*'],
+    allow_credentials=True,
+    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
     allow_methods=["*"],
     allow_headers=["*"],
 )
