@@ -478,14 +478,16 @@ async def update_deal(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db)
 ):
-    """Atualizar deal - valida pr\u00f3xima a\u00e7\u00e3o"""
+    """Atualizar deal - valida próxima ação"""
     existing = await db.deals.find_one({"id": deal_id}, {"_id": 0})
     if not existing:
-        raise HTTPException(status_code=404, detail="Deal n\u00e3o encontrado")
-    
-    # Validar pr\u00f3xima a\u00e7\u00e3o
+        raise HTTPException(status_code=404, detail="Deal não encontrado")
+
+    stage_changed = existing.get('etapa') != deal_data.etapa
+
+    # Validar próxima ação apenas quando houver mudança de etapa
     proxima_acao_dict = deal_data.proxima_acao.model_dump() if deal_data.proxima_acao else None
-    if not validar_proxima_acao(deal_data.etapa, proxima_acao_dict):
+    if stage_changed and not validar_proxima_acao(deal_data.etapa, proxima_acao_dict):
         raise HTTPException(
             status_code=400,
             detail="Próxima ação é obrigatória para mudança de etapa (exceto Fechado/Nutrição)"
@@ -499,12 +501,32 @@ async def update_deal(
         if not lead or not checklist_qualificacao_preenchido(lead):
             raise HTTPException(
                 status_code=400,
-                detail="Preencha o checklist de qualifica\u00e7\u00e3o antes de mover o lead para Qualificado"
+                detail="Preencha o checklist de qualificação antes de mover o lead para Qualificado"
             )
 
     update_data = deal_data.model_dump()
-    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
-    
+    now_utc = datetime.now(timezone.utc)
+    update_data['updated_at'] = now_utc.isoformat()
+
+    if stage_changed and deal_data.etapa == PipelineStage.CONTATO_REALIZADO:
+        lead = await db.leads.find_one({"id": existing.get('lead_id')}, {"_id": 0})
+        if lead and not lead.get('primeiro_contato_em'):
+            created_at = lead.get('created_at')
+            if isinstance(created_at, str):
+                created_at = datetime.fromisoformat(created_at)
+            sla_minutos = None if lead.get('ignorar_speed_to_lead') else calcular_sla_minutos(created_at, now_utc)
+
+            await db.leads.update_one(
+                {"id": lead['id']},
+                {
+                    "$set": {
+                        "primeiro_contato_em": now_utc.isoformat(),
+                        "status_sla_minutos": sla_minutos,
+                        "updated_at": now_utc.isoformat(),
+                    }
+                },
+            )
+
     # Se moveu para Proposta Enviada/Negociação, criar cadência automática (se ainda não existir)
     if (
         deal_data.etapa in [PipelineStage.PROPOSTA_ENVIADA, PipelineStage.NEGOCIACAO]
@@ -515,13 +537,13 @@ async def update_deal(
     # Se fechou, marcar closed_at
     if deal_data.etapa in [PipelineStage.FECHADO_GANHO, PipelineStage.FECHADO_PERDIDO]:
         update_data['closed_at'] = datetime.now(timezone.utc).isoformat()
-    
+
     # Serializar proxima_acao
     if update_data.get('proxima_acao'):
         update_data['proxima_acao']['data_hora'] = update_data['proxima_acao']['data_hora'].isoformat()
-    
+
     await db.deals.update_one({"id": deal_id}, {"$set": update_data})
-    
+
     updated = await db.deals.find_one({"id": deal_id}, {"_id": 0})
     if isinstance(updated.get('created_at'), str):
         updated['created_at'] = datetime.fromisoformat(updated['created_at'])
@@ -531,7 +553,7 @@ async def update_deal(
         updated['closed_at'] = datetime.fromisoformat(updated['closed_at'])
     if updated.get('proxima_acao') and isinstance(updated['proxima_acao'].get('data_hora'), str):
         updated['proxima_acao']['data_hora'] = datetime.fromisoformat(updated['proxima_acao']['data_hora'])
-    
+
     return updated
 
 
