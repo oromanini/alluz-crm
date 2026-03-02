@@ -9,6 +9,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { LoadingSpinner } from '../components/ui/loading-spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
   Tooltip,
   TooltipContent,
@@ -171,6 +172,18 @@ const buildLeadFormData = (lead) => ({
   origem: lead.origem || 'Outro',
 });
 
+const formatActivityDateTime = (value) => {
+  if (!value) return '-';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+
+  return date.toLocaleString('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+};
+
 export default function Pipeline() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -203,6 +216,27 @@ export default function Pipeline() {
   const [leadFormData, setLeadFormData] = useState(buildLeadFormData({}));
   const [isSavingLead, setIsSavingLead] = useState(false);
   const [isArchivingLead, setIsArchivingLead] = useState(false);
+  const [activitiesHistory, setActivitiesHistory] = useState([]);
+  const [isLoadingActivitiesHistory, setIsLoadingActivitiesHistory] = useState(false);
+
+  const fetchActivitiesHistory = async (leadId, dealId) => {
+    if (!leadId || !dealId) {
+      setActivitiesHistory([]);
+      return;
+    }
+
+    try {
+      setIsLoadingActivitiesHistory(true);
+      const response = await activitiesAPI.list({ lead_id: leadId, deal_id: dealId });
+      setActivitiesHistory(response.data);
+    } catch (error) {
+      console.error('Error fetching activities history', error);
+      toast.error('Erro ao carregar histórico de atividades');
+      setActivitiesHistory([]);
+    } finally {
+      setIsLoadingActivitiesHistory(false);
+    }
+  };
 
   const showChecklistRequiredModal = () => {
     setIsMoveBlockedModalOpen(true);
@@ -368,6 +402,7 @@ export default function Pipeline() {
       registro_atividade: '',
     });
     setLeadFormData(buildLeadFormData(lead));
+    await fetchActivitiesHistory(deal.lead_id, deal.id);
     setIsEditModalOpen(true);
   };
 
@@ -549,6 +584,8 @@ export default function Pipeline() {
           notas: activityDescription,
           responsavel_id: user.id,
         });
+
+        await fetchActivitiesHistory(dealInEdition.lead_id, dealInEdition.id);
       }
 
       await fetchData();
@@ -947,75 +984,82 @@ export default function Pipeline() {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleUpdateLead} className="space-y-4 border border-white/10 rounded-lg p-4 bg-black/20">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold text-brand-yellow">Dados do lead</h4>
-              <Button
-                type="button"
-                variant="destructive"
-                className="bg-red-600 hover:bg-red-700"
-                onClick={handleArchiveLead}
-                disabled={isArchivingLead || isSavingLead}
-              >
-                {isArchivingLead ? <span className="inline-flex rounded-full bg-black/70 p-1"><LoadingSpinner className="text-white" size={14} /></span> : 'Arquivar lead'}
-              </Button>
-            </div>
+          <Tabs defaultValue="dados" className="space-y-4">
+            <TabsList className="bg-black/20 border border-white/10">
+              <TabsTrigger value="dados">Dados</TabsTrigger>
+              <TabsTrigger value="historico">Histórico de atividades</TabsTrigger>
+            </TabsList>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="lead_nome" className="text-white">Nome *</Label>
-                <Input id="lead_nome" name="nome" value={leadFormData.nome} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" required />
-              </div>
+            <TabsContent value="dados" className="space-y-4">
+              <form onSubmit={handleUpdateLead} className="space-y-4 border border-white/10 rounded-lg p-4 bg-black/20">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-brand-yellow">Dados do lead</h4>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="bg-red-600 hover:bg-red-700"
+                    onClick={handleArchiveLead}
+                    disabled={isArchivingLead || isSavingLead}
+                  >
+                    {isArchivingLead ? <span className="inline-flex rounded-full bg-black/70 p-1"><LoadingSpinner className="text-white" size={14} /></span> : 'Arquivar lead'}
+                  </Button>
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="lead_telefone" className="text-white">Telefone *</Label>
-                <Input id="lead_telefone" name="telefone" value={leadFormData.telefone} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" required />
-              </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="lead_nome" className="text-white">Nome *</Label>
+                    <Input id="lead_nome" name="nome" value={leadFormData.nome} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" required />
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="lead_email" className="text-white">Email</Label>
-                <Input id="lead_email" name="email" type="email" value={leadFormData.email} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" />
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lead_telefone" className="text-white">Telefone *</Label>
+                    <Input id="lead_telefone" name="telefone" value={leadFormData.telefone} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" required />
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="lead_cidade" className="text-white">Cidade</Label>
-                <Input id="lead_cidade" name="cidade" value={leadFormData.cidade} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" />
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lead_email" className="text-white">Email</Label>
+                    <Input id="lead_email" name="email" type="email" value={leadFormData.email} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" />
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="lead_bairro" className="text-white">Bairro</Label>
-                <Input id="lead_bairro" name="bairro" value={leadFormData.bairro} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" />
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lead_cidade" className="text-white">Cidade</Label>
+                    <Input id="lead_cidade" name="cidade" value={leadFormData.cidade} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" />
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="lead_conta_media" className="text-white">Conta média (R$)</Label>
-                <Input id="lead_conta_media" name="conta_media" value={leadFormData.conta_media} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" />
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lead_bairro" className="text-white">Bairro</Label>
+                    <Input id="lead_bairro" name="bairro" value={leadFormData.bairro} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" />
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="lead_origem" className="text-white">Origem</Label>
-                <select
-                  id="lead_origem"
-                  name="origem"
-                  value={leadFormData.origem}
-                  onChange={handleLeadFieldChange}
-                  className="w-full h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white"
-                >
-                  {['Meta', 'Facebook Ads', 'Google', 'Indicação', 'Orgânico', 'Outro'].map((origem) => (
-                    <option key={origem} value={origem} className="bg-brand-gray text-white">{origem}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lead_conta_media" className="text-white">Conta média (R$)</Label>
+                    <Input id="lead_conta_media" name="conta_media" value={leadFormData.conta_media} onChange={handleLeadFieldChange} className="bg-black/30 border-white/10 text-white" />
+                  </div>
 
-            <div className="flex justify-end">
-              <Button type="submit" className="bg-brand-yellow text-black hover:bg-brand-yellow/90 font-bold" disabled={isSavingLead || isArchivingLead}>
-                {isSavingLead ? <span className="inline-flex rounded-full bg-black/70 p-1"><LoadingSpinner className="text-brand-yellow" size={14} /></span> : 'Salvar lead'}
-              </Button>
-            </div>
-          </form>
+                  <div className="space-y-2">
+                    <Label htmlFor="lead_origem" className="text-white">Origem</Label>
+                    <select
+                      id="lead_origem"
+                      name="origem"
+                      value={leadFormData.origem}
+                      onChange={handleLeadFieldChange}
+                      className="w-full h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white"
+                    >
+                      {['Meta', 'Facebook Ads', 'Google', 'Indicação', 'Orgânico', 'Outro'].map((origem) => (
+                        <option key={origem} value={origem} className="bg-brand-gray text-white">{origem}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
 
-          <form onSubmit={handleUpdateDeal} className="space-y-4 border border-white/10 rounded-lg p-4 bg-black/20">
+                <div className="flex justify-end">
+                  <Button type="submit" className="bg-brand-yellow text-black hover:bg-brand-yellow/90 font-bold" disabled={isSavingLead || isArchivingLead}>
+                    {isSavingLead ? <span className="inline-flex rounded-full bg-black/70 p-1"><LoadingSpinner className="text-brand-yellow" size={14} /></span> : 'Salvar lead'}
+                  </Button>
+                </div>
+              </form>
+
+              <form onSubmit={handleUpdateDeal} className="space-y-4 border border-white/10 rounded-lg p-4 bg-black/20">
             <h4 className="text-sm font-semibold text-brand-yellow">Dados do deal</h4>
             <div className="space-y-2">
               <Label htmlFor="etapa" className="text-white">Etapa</Label>
@@ -1079,25 +1123,48 @@ export default function Pipeline() {
               </div>
             )}
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="ghost"
-                className="text-white hover:bg-white/10"
-                onClick={() => setIsEditModalOpen(false)}
-                disabled={isSavingDeal}
-              >
-                Fechar
-              </Button>
-              <Button
-                type="submit"
-                className="bg-brand-yellow text-black hover:bg-brand-yellow/90 font-bold"
-                disabled={isSavingDeal}
-              >
-                {isSavingDeal ? <span className="inline-flex rounded-full bg-black/70 p-1"><LoadingSpinner className="text-brand-yellow" size={14} /></span> : 'Salvar deal'}
-              </Button>
-            </DialogFooter>
-          </form>
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="text-white hover:bg-white/10"
+                    onClick={() => setIsEditModalOpen(false)}
+                    disabled={isSavingDeal}
+                  >
+                    Fechar
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="bg-brand-yellow text-black hover:bg-brand-yellow/90 font-bold"
+                    disabled={isSavingDeal}
+                  >
+                    {isSavingDeal ? <span className="inline-flex rounded-full bg-black/70 p-1"><LoadingSpinner className="text-brand-yellow" size={14} /></span> : 'Salvar deal'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </TabsContent>
+
+            <TabsContent value="historico">
+              <div className="space-y-3 border border-white/10 rounded-lg p-4 bg-black/20">
+                <h4 className="text-sm font-semibold text-brand-yellow">Histórico do registro de atividades</h4>
+
+                {isLoadingActivitiesHistory ? (
+                  <div className="flex justify-center py-6"><LoadingSpinner /></div>
+                ) : activitiesHistory.length === 0 ? (
+                  <p className="text-sm text-white/70">Nenhuma atividade registrada para este lead.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {activitiesHistory.map((activity) => (
+                      <div key={activity.id} className="border border-white/10 rounded-md p-3 bg-black/30 space-y-1">
+                        <p className="text-sm text-white">{activity.notas?.trim() || '-'}</p>
+                        <p className="text-xs text-white/60">Data e hora: {formatActivityDateTime(activity.data_hora)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
     </div>
