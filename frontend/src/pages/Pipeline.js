@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { dealsAPI, leadsAPI } from '../lib/api';
+import { activitiesAPI, dealsAPI, leadsAPI } from '../lib/api';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -25,6 +25,7 @@ import {
 } from '../components/ui/dialog';
 import { Phone, MessageCircle, Calendar, Pencil, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 
 const PIPELINE_STAGES = [
   'Lead Novo',
@@ -172,6 +173,7 @@ const buildLeadFormData = (lead) => ({
 
 export default function Pipeline() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [deals, setDeals] = useState([]);
   const [leadsMap, setLeadsMap] = useState({});
   const [loading, setLoading] = useState(true);
@@ -181,11 +183,7 @@ export default function Pipeline() {
   const [dealFormData, setDealFormData] = useState({
     etapa: '',
     valor_estimado: '',
-    proxima_acao_tipo: '',
-    proxima_acao_descricao: '',
-    proxima_acao_data_hora: '',
-    proxima_acao_responsavel: '',
-    proxima_acao_canal: '',
+    registro_atividade: '',
   });
   const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
   const [isMoveBlockedModalOpen, setIsMoveBlockedModalOpen] = useState(false);
@@ -367,11 +365,7 @@ export default function Pipeline() {
           maximumFractionDigits: 2,
         })
         : '',
-      proxima_acao_tipo: deal.proxima_acao?.tipo || '',
-      proxima_acao_descricao: deal.proxima_acao?.descricao || '',
-      proxima_acao_data_hora: toDateTimeLocalValue(deal.proxima_acao?.data_hora),
-      proxima_acao_responsavel: deal.proxima_acao?.responsavel || '',
-      proxima_acao_canal: deal.proxima_acao?.canal || '',
+      registro_atividade: '',
     });
     setLeadFormData(buildLeadFormData(lead));
     setIsEditModalOpen(true);
@@ -525,19 +519,8 @@ export default function Pipeline() {
     }
 
     const isStageChanging = dealFormData.etapa !== dealInEdition.etapa;
-    const isNextActionRequired = isStageChanging && stageRequiresNextAction(dealFormData.etapa);
-    const hasAnyNextActionField =
-      dealFormData.proxima_acao_tipo.trim()
-      || dealFormData.proxima_acao_descricao.trim()
-      || dealFormData.proxima_acao_data_hora;
-
-    if (isNextActionRequired && !hasAnyNextActionField) {
-      toast.error('Próxima ação é obrigatória para esta etapa');
-      return;
-    }
-
-    if (hasAnyNextActionField && (!dealFormData.proxima_acao_tipo.trim() || !dealFormData.proxima_acao_data_hora || !dealFormData.proxima_acao_responsavel.trim() || !dealFormData.proxima_acao_canal.trim())) {
-      toast.error('Preencha tipo, data, responsável e canal da próxima ação');
+    if (isStageChanging && stageRequiresNextAction(dealFormData.etapa)) {
+      toast.error('Mova o card para alterar esta etapa e definir a próxima ação.');
       return;
     }
 
@@ -545,24 +528,33 @@ export default function Pipeline() {
       ...dealInEdition,
       etapa: dealFormData.etapa,
       valor_estimado: parseCurrencyMaskToNumber(dealFormData.valor_estimado),
-      proxima_acao: hasAnyNextActionField
-        ? {
-          tipo: dealFormData.proxima_acao_tipo.trim(),
-          descricao: dealFormData.proxima_acao_descricao.trim() || null,
-          data_hora: dealFormData.proxima_acao_data_hora,
-          responsavel: dealFormData.proxima_acao_responsavel.trim(),
-          canal: dealFormData.proxima_acao_canal,
-        }
-        : null,
     };
+
+    const activityDescription = dealFormData.registro_atividade.trim();
+    if (activityDescription && !user?.id) {
+      toast.error('Não foi possível identificar o usuário para registrar a atividade.');
+      return;
+    }
 
     try {
       setIsSavingDeal(true);
       await dealsAPI.update(dealInEdition.id, payload);
+
+      if (activityDescription) {
+        await activitiesAPI.create({
+          lead_id: dealInEdition.lead_id,
+          deal_id: dealInEdition.id,
+          tipo: 'Follow-up',
+          data_hora: new Date().toISOString(),
+          notas: activityDescription,
+          responsavel_id: user.id,
+        });
+      }
+
       await fetchData();
       setIsEditModalOpen(false);
       setDealInEdition(null);
-      toast.success('Deal atualizado com sucesso!');
+      toast.success(activityDescription ? 'Deal atualizado e atividade registrada!' : 'Deal atualizado com sucesso!');
     } catch (error) {
       console.error('Error updating deal', error);
       toast.error('Erro ao atualizar deal');
@@ -1056,70 +1048,19 @@ export default function Pipeline() {
             </div>
 
             <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">
-              <h4 className="text-sm font-semibold text-brand-yellow">Próxima ação</h4>
-
+              <h4 className="text-sm font-semibold text-brand-yellow">Registro de atividades</h4>
+              <p className="text-xs text-white/70">Adicione uma observação de histórico para este card (opcional).</p>
               <div className="space-y-2">
-                <Label htmlFor="proxima_acao_tipo" className="text-white">Tipo</Label>
-                <Input
-                  id="proxima_acao_tipo"
-                  name="proxima_acao_tipo"
-                  value={dealFormData.proxima_acao_tipo}
-                  onChange={handleEditFieldChange}
-                  placeholder="Ex.: Follow-up WhatsApp"
-                  className="bg-black/30 border-white/10 text-white"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="proxima_acao_descricao" className="text-white">Descrição</Label>
+                <Label htmlFor="registro_atividade" className="text-white">Atividade</Label>
                 <Textarea
-                  id="proxima_acao_descricao"
-                  name="proxima_acao_descricao"
-                  value={dealFormData.proxima_acao_descricao}
+                  id="registro_atividade"
+                  name="registro_atividade"
+                  value={dealFormData.registro_atividade}
                   onChange={handleEditFieldChange}
-                  placeholder="Descreva o próximo passo"
+                  placeholder="Ex.: Liguei para o cliente e ele pediu retorno amanhã às 10h."
                   className="bg-black/30 border-white/10 text-white"
-                  rows={3}
+                  rows={4}
                 />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="proxima_acao_data_hora" className="text-white">Data e hora</Label>
-                <Input
-                  id="proxima_acao_data_hora"
-                  name="proxima_acao_data_hora"
-                  type="datetime-local"
-                  value={dealFormData.proxima_acao_data_hora}
-                  onChange={handleEditFieldChange}
-                  className="bg-black/30 border-white/10 text-white"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="proxima_acao_responsavel" className="text-white">Responsável</Label>
-                <Input
-                  id="proxima_acao_responsavel"
-                  name="proxima_acao_responsavel"
-                  value={dealFormData.proxima_acao_responsavel}
-                  onChange={handleEditFieldChange}
-                  placeholder="Nome do responsável"
-                  className="bg-black/30 border-white/10 text-white"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="proxima_acao_canal" className="text-white">Canal</Label>
-                <select
-                  id="proxima_acao_canal"
-                  name="proxima_acao_canal"
-                  value={dealFormData.proxima_acao_canal}
-                  onChange={handleEditFieldChange}
-                  className="w-full h-10 rounded-md border border-white/10 bg-black/30 px-3 text-sm text-white"
-                >
-                  {['WhatsApp', 'Ligação', 'Meet', 'Visita', 'Interno'].map((canal) => (
-                    <option key={canal} value={canal} className="bg-brand-gray text-white">{canal}</option>
-                  ))}
-                </select>
               </div>
             </div>
 
@@ -1133,7 +1074,7 @@ export default function Pipeline() {
               <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">
                 <h4 className="text-sm font-semibold text-brand-yellow">Regra de movimentação</h4>
                 <p className="text-xs text-white/70">
-                  Ao mudar de coluna, é obrigatório definir a próxima ação (tipo, data/hora, responsável e canal), exceto em Fechado e Nutrição.
+                  A próxima ação é definida apenas na movimentação do card, exceto em Fechado e Nutrição.
                 </p>
               </div>
             )}
