@@ -135,8 +135,8 @@ const parseCurrencyMaskToNumber = (value) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
-const formatSlaStatus = (minutes) => {
-  if (minutes === null || minutes === undefined) {
+const formatSlaStatus = (minutes, firstContactAt) => {
+  if (!firstContactAt) {
     return {
       title: 'Aguardando primeiro contato',
       tone: 'text-white/70',
@@ -667,7 +667,7 @@ export default function Pipeline() {
   };
 
   const leadInEdition = dealInEdition ? leadsMap[dealInEdition.lead_id] : null;
-  const slaInfo = formatSlaStatus(leadInEdition?.status_sla_minutos);
+  const slaInfo = formatSlaStatus(leadInEdition?.status_sla_minutos, leadInEdition?.primeiro_contato_em);
 
   if (loading) {
     return (
