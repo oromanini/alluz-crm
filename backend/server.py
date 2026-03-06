@@ -1,14 +1,18 @@
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, File, UploadFile, Body
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, File, UploadFile, Body, Query, Request
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import hashlib
+import hmac
+import json
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 import uuid
+import httpx
 
 from models import (
     User, UserCreate, Lead, LeadCreate, Deal, DealCreate,
@@ -50,6 +54,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 SLA_SPEED_TO_LEAD_MINUTOS = 10
+META_GRAPH_API_VERSION = os.getenv("META_GRAPH_API_VERSION", "v20.0")
 
 
 ACTIVITY_TYPE_BY_CHANNEL = {
@@ -57,6 +62,94 @@ ACTIVITY_TYPE_BY_CHANNEL = {
     "ligacao": "Ligação",
     "email": "Email"
 }
+
+
+def validar_assinatura_meta(body: bytes, assinatura: Optional[str]) -> bool:
+    """Valida assinatura do webhook da Meta quando META_APP_SECRET estiver configurado."""
+    app_secret = os.getenv("META_APP_SECRET")
+    if not app_secret:
+        return True
+
+    if not assinatura or not assinatura.startswith("sha256="):
+        return False
+
+    recebido = assinatura.split("sha256=", 1)[1]
+    calculado = hmac.new(app_secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(recebido, calculado)
+
+
+async def buscar_lead_meta(leadgen_id: str) -> dict:
+    """Busca detalhes do lead no Graph API a partir do leadgen_id."""
+    page_access_token = os.getenv("META_PAGE_ACCESS_TOKEN")
+    if not page_access_token:
+        raise HTTPException(
+            status_code=500,
+            detail="META_PAGE_ACCESS_TOKEN não configurado no backend"
+        )
+
+    fields = "full_name,first_name,last_name,phone_number,email,campaign_id,form_id"
+    url = f"https://graph.facebook.com/{META_GRAPH_API_VERSION}/{leadgen_id}"
+
+    async with httpx.AsyncClient(timeout=20.0) as client_http:
+        response = await client_http.get(
+            url,
+            params={
+                "access_token": page_access_token,
+                "fields": fields
+            }
+        )
+
+    if response.status_code >= 400:
+        logger.error("Erro Graph API (%s): %s", response.status_code, response.text)
+        raise HTTPException(status_code=502, detail="Falha ao buscar lead no Graph API")
+
+    return response.json()
+
+
+async def criar_lead_via_webhook(db, lead_data: WebhookLeadCapture, descricao_origem: str = "webhook") -> str:
+    """Cria lead/deal/notificações com base no payload de webhook e retorna o lead_id."""
+    lead = Lead(
+        nome=lead_data.nome,
+        telefone=lead_data.telefone,
+        email=lead_data.email,
+        origem=lead_data.origem,
+        utm_source=lead_data.utm_source,
+        utm_medium=lead_data.utm_medium,
+        utm_campaign=lead_data.utm_campaign,
+        conta_media=lead_data.conta_media,
+        urgencia=lead_data.urgencia
+    )
+
+    lead.classificacao = calcular_classificacao_lead(lead_data.model_dump())
+
+    doc = lead.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+
+    await db.leads.insert_one(doc)
+
+    deal = Deal(
+        lead_id=lead.id,
+        etapa=PipelineStage.LEAD_NOVO
+    )
+    deal_doc = deal.model_dump()
+    deal_doc['created_at'] = deal_doc['created_at'].isoformat()
+    deal_doc['updated_at'] = deal_doc['updated_at'].isoformat()
+    await db.deals.insert_one(deal_doc)
+
+    sdrs = await db.users.find({"role": "sdr"}, {"_id": 0}).to_list(100)
+    for sdr in sdrs:
+        notif = Notification(
+            user_id=sdr['id'],
+            tipo="lead_novo",
+            mensagem=f"Novo lead via {descricao_origem}: {lead.nome} - {lead.classificacao}",
+            link=f"/lead/{lead.id}"
+        )
+        notif_doc = notif.model_dump()
+        notif_doc['created_at'] = notif_doc['created_at'].isoformat()
+        await db.notifications.insert_one(notif_doc)
+
+    return lead.id
 
 
 async def obter_ou_criar_cadencia_followup(db, deal_id: str, force_reset: bool = False):
@@ -1061,53 +1154,87 @@ async def get_dashboard_metrics(
 # WEBHOOK ENDPOINTS
 @api_router.post("/webhooks/lead-capture")
 async def webhook_lead_capture(lead_data: WebhookLeadCapture, db=Depends(get_db)):
-    """Webhook para capturar leads do Meta Lead Ads"""
-    # Criar lead
-    lead = Lead(
-        nome=lead_data.nome,
-        telefone=lead_data.telefone,
-        email=lead_data.email,
-        origem=lead_data.origem,
-        utm_source=lead_data.utm_source,
-        utm_medium=lead_data.utm_medium,
-        utm_campaign=lead_data.utm_campaign,
-        conta_media=lead_data.conta_media,
-        urgencia=lead_data.urgencia
-    )
-    
-    # Calcular classifica\u00e7\u00e3o
-    lead.classificacao = calcular_classificacao_lead(lead_data.model_dump())
-    
-    doc = lead.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    doc['updated_at'] = doc['updated_at'].isoformat()
-    
-    await db.leads.insert_one(doc)
-    
-    # Criar deal
-    deal = Deal(
-        lead_id=lead.id,
-        etapa=PipelineStage.LEAD_NOVO
-    )
-    deal_doc = deal.model_dump()
-    deal_doc['created_at'] = deal_doc['created_at'].isoformat()
-    deal_doc['updated_at'] = deal_doc['updated_at'].isoformat()
-    await db.deals.insert_one(deal_doc)
-    
-    # Notificar SDRs
-    sdrs = await db.users.find({"role": "sdr"}, {"_id": 0}).to_list(100)
-    for sdr in sdrs:
-        notif = Notification(
-            user_id=sdr['id'],
-            tipo="lead_novo",
-            mensagem=f"Novo lead via webhook: {lead.nome} - {lead.classificacao}",
-            link=f"/lead/{lead.id}"
-        )
-        notif_doc = notif.model_dump()
-        notif_doc['created_at'] = notif_doc['created_at'].isoformat()
-        await db.notifications.insert_one(notif_doc)
-    
-    return {"status": "ok", "lead_id": lead.id}
+    """Webhook interno para capturar leads já normalizados."""
+    lead_id = await criar_lead_via_webhook(db, lead_data, descricao_origem="webhook")
+    return {"status": "ok", "lead_id": lead_id}
+
+
+@api_router.get("/webhooks/meta-leads")
+async def webhook_meta_verify(
+    hub_mode: Optional[str] = Query(default=None, alias="hub.mode"),
+    hub_verify_token: Optional[str] = Query(default=None, alias="hub.verify_token"),
+    hub_challenge: Optional[str] = Query(default=None, alias="hub.challenge")
+):
+    """Validação inicial do webhook da Meta."""
+    verify_token = os.getenv("META_VERIFY_TOKEN")
+
+    if hub_mode == "subscribe" and verify_token and hub_verify_token == verify_token:
+        return int(hub_challenge) if hub_challenge and hub_challenge.isdigit() else (hub_challenge or "")
+
+    raise HTTPException(status_code=403, detail="Falha na verificação do webhook Meta")
+
+
+@api_router.post("/webhooks/meta-leads")
+async def webhook_meta_leads(request: Request, db=Depends(get_db)):
+    """Recebe notificações do Facebook Lead Ads e cria leads automaticamente."""
+    body = await request.body()
+    assinatura = request.headers.get("x-hub-signature-256")
+    if not validar_assinatura_meta(body, assinatura):
+        raise HTTPException(status_code=401, detail="Assinatura inválida")
+
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Payload inválido") from exc
+
+    created_leads = []
+    ignored_events = 0
+
+    for entry in payload.get("entry", []):
+        for change in entry.get("changes", []):
+            if change.get("field") != "leadgen":
+                ignored_events += 1
+                continue
+
+            value = change.get("value", {})
+            leadgen_id = value.get("leadgen_id")
+            if not leadgen_id:
+                ignored_events += 1
+                continue
+
+            lead_meta = await buscar_lead_meta(leadgen_id)
+            nome = lead_meta.get("full_name") or " ".join(
+                [
+                    lead_meta.get("first_name", "").strip(),
+                    lead_meta.get("last_name", "").strip()
+                ]
+            ).strip() or f"Lead Meta {leadgen_id}"
+            telefone = lead_meta.get("phone_number")
+
+            if not telefone:
+                logger.warning("Lead %s ignorado: phone_number ausente", leadgen_id)
+                ignored_events += 1
+                continue
+
+            lead_payload = WebhookLeadCapture(
+                nome=nome,
+                telefone=telefone,
+                email=lead_meta.get("email"),
+                origem="Facebook Ads",
+                utm_source="facebook",
+                utm_medium="lead_ads",
+                utm_campaign=lead_meta.get("campaign_id")
+            )
+
+            lead_id = await criar_lead_via_webhook(db, lead_payload, descricao_origem="Meta Lead Ads")
+            created_leads.append({"lead_id": lead_id, "leadgen_id": leadgen_id})
+
+    return {
+        "status": "ok",
+        "created": len(created_leads),
+        "ignored": ignored_events,
+        "leads": created_leads
+    }
 
 
 # USERS MANAGEMENT (Admin only)
