@@ -45,7 +45,7 @@ jobs:
             --region "${REGION}" \
             --allow-unauthenticated \
             --port 8080 \
-            --set-env-vars "APP_MODULE=server:app"
+            --set-env-vars "APP_MODULE=server:app,META_VERIFY_TOKEN=alluz-meta-2026,META_PAGE_ACCESS_TOKEN=${{ secrets.META_PAGE_ACCESS_TOKEN }}"
 
       - name: Read backend URL
         id: backend_url
