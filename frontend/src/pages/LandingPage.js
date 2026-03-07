@@ -51,15 +51,24 @@ export default function LandingPage() {
     const ctx = gsap.context(() => {
       gsap.fromTo(
         '.sun-gradient',
-        { backgroundPosition: '10% 30%' },
+        { backgroundPosition: '15% 30%' },
         {
-          backgroundPosition: '90% 70%',
-          duration: 12,
+          backgroundPosition: '85% 70%',
+          duration: 10,
           ease: 'sine.inOut',
           repeat: -1,
           yoyo: true,
         }
       );
+
+      gsap.to('.floating-glow', {
+        y: -16,
+        duration: 2.6,
+        stagger: 0.2,
+        repeat: -1,
+        yoyo: true,
+        ease: 'sine.inOut',
+      });
 
       gsap.fromTo(
         '.hero-copy > *',
@@ -77,6 +86,19 @@ export default function LandingPage() {
         formCardRef.current,
         { x: 50, opacity: 0, scale: 0.98 },
         { x: 0, opacity: 1, scale: 1, duration: 0.8, delay: 0.35, ease: 'power3.out' }
+      );
+
+      gsap.fromTo(
+        '.benefit-chip',
+        { y: 16, opacity: 0 },
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.5,
+          stagger: 0.08,
+          delay: 0.45,
+          ease: 'power2.out',
+        }
       );
     }, heroRef);
 
@@ -146,11 +168,14 @@ export default function LandingPage() {
 
   return (
     <main ref={heroRef} className="relative min-h-screen overflow-hidden bg-brand-dark text-white">
-      <div className="sun-gradient absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(245,158,11,0.23),rgba(30,64,175,0.07)_38%,rgba(15,23,42,0.95)_72%)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(59,130,246,0.12)_0%,rgba(14,116,144,0.07)_35%,rgba(245,158,11,0.14)_100%)]" />
+      <div className="sun-gradient absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(251,191,36,0.38),rgba(217,119,6,0.2)_42%,rgba(15,23,42,0.88)_74%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(251,191,36,0.2)_0%,rgba(245,158,11,0.16)_40%,rgba(15,23,42,0.3)_100%)]" />
+      <div className="floating-glow pointer-events-none absolute -left-20 top-24 h-44 w-44 rounded-full bg-amber-200/25 blur-3xl" />
+      <div className="floating-glow pointer-events-none absolute bottom-24 right-10 h-52 w-52 rounded-full bg-yellow-300/20 blur-3xl" />
 
-      <section className="relative mx-auto grid min-h-screen max-w-7xl grid-cols-1 items-center gap-10 px-6 py-14 lg:grid-cols-2 lg:px-10">
-        <div className="hero-copy space-y-7">
+      <section className="relative mx-auto grid min-h-screen max-w-7xl grid-cols-1 items-center gap-8 px-6 py-10 lg:grid-cols-2 lg:px-10">
+        <div className="hero-copy space-y-5">
+          <img src="/images/logo-alluz.svg" alt="Logo Alluz" className="h-12 w-auto" />
           <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-sm text-amber-200">
             <TrendingUp className="h-4 w-4" /> Engenharia financeira aplicada à energia
           </div>
@@ -158,60 +183,48 @@ export default function LandingPage() {
           <h1 className="max-w-xl text-4xl font-semibold leading-tight text-white md:text-5xl">
             Pare de investir em equipamentos. Comece a investir no seu lucro.
           </h1>
-          <p className="max-w-xl text-lg text-slate-200/90">
+          <p className="max-w-xl text-base text-amber-50/95 md:text-lg">
             Na Alluz Energia, nós não vendemos painéis solares. Nós vendemos a redução real da sua conta de luz.
-            Tenha uma economia de até 95% sem se preocupar com a sopa de letrinhas técnica.
+            Economia de até 95% com plano claro e sem complicação técnica.
           </p>
 
           <div className="grid max-w-xl gap-3 text-sm md:grid-cols-2">
-            <div className="rounded-xl border border-rose-200/20 bg-rose-200/10 p-3">
-              <p className="font-semibold text-rose-100">O Jeito Antigo (ficar parado)</p>
-              <ul className="mt-2 space-y-2 text-rose-50/90">
-                <li>Refém dos aumentos anuais da concessionária.</li>
-                <li>Dinheiro jogado fora todo mês.</li>
-                <li>Preocupação com bandeiras tarifárias.</li>
+            <div className="rounded-xl border border-amber-100/30 bg-amber-100/10 p-3">
+              <p className="font-semibold text-amber-100">Sem Alluz</p>
+              <ul className="mt-2 space-y-1.5 text-amber-50/90">
+                <li>Conta subindo todo ano.</li>
+                <li>Fluxo de caixa imprevisível.</li>
+                <li>Sem estratégia financeira.</li>
               </ul>
             </div>
-            <div className="rounded-xl border border-emerald-200/30 bg-emerald-200/10 p-3">
-              <p className="font-semibold text-emerald-100">O Jeito Alluz (redução real)</p>
-              <ul className="mt-2 space-y-2 text-emerald-50/90">
-                <li>Imunidade contra a inflação energética.</li>
-                <li>Capital que vira investimento no seu imóvel ou negócio.</li>
-                <li>Previsibilidade total do seu fluxo de caixa.</li>
+            <div className="rounded-xl border border-yellow-200/35 bg-yellow-200/10 p-3">
+              <p className="font-semibold text-yellow-100">Com Alluz</p>
+              <ul className="mt-2 space-y-1.5 text-yellow-50/95">
+                <li>Redução imediata e progressiva.</li>
+                <li>Capital livre para crescer.</li>
+                <li>Previsibilidade da conta.</li>
               </ul>
             </div>
           </div>
 
-          <div className="space-y-2 text-slate-100/95">
+          <div className="space-y-2 text-amber-50/95">
             <p className="font-semibold text-white">Por que a Alluz é diferente?</p>
-            <p className="max-w-xl text-sm leading-relaxed text-slate-200/90">
-              O mercado quer te empurrar marcas de inversores e especificações de placas. Para você, isso é irrelevante.
-              O que importa é quanto você paga hoje e quanto vai pagar amanhã. Se não trouxer máxima redução no menor
-              tempo possível, não serve para nós — e nem para você.
+            <p className="max-w-xl text-sm leading-relaxed text-amber-50/90">
+              Aqui o foco é resultado financeiro: quanto você paga hoje, quanto pode economizar e em quanto tempo isso
+              vira lucro no seu bolso.
             </p>
           </div>
 
-          <div className="space-y-2 text-sm text-slate-200/95">
-            <p className="flex items-center gap-2">
+          <div className="grid max-w-xl gap-2 text-sm text-amber-50/95 md:grid-cols-2">
+            <p className="benefit-chip flex items-center gap-2 rounded-lg border border-amber-100/25 bg-amber-100/10 px-3 py-2">
               <CheckCircle2 className="h-4 w-4 text-amber-300" /> Análise de Perfil: consumo dos últimos 12 meses.
             </p>
-            <p className="flex items-center gap-2">
+            <p className="benefit-chip flex items-center gap-2 rounded-lg border border-amber-100/25 bg-amber-100/10 px-3 py-2">
               <CheckCircle2 className="h-4 w-4 text-amber-300" /> Engenharia de Redução: projeto focado no ROI.
             </p>
-            <p className="flex items-center gap-2">
+            <p className="benefit-chip flex items-center gap-2 rounded-lg border border-amber-100/25 bg-amber-100/10 px-3 py-2 md:col-span-2">
               <CheckCircle2 className="h-4 w-4 text-amber-300" /> Instalação e Sorriso: menos burocracia, mais economia.
             </p>
-          </div>
-          <div className="hidden lg:block">
-            <a
-              href="https://simulador.alluzenergia.com.br/"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 text-sm font-medium text-amber-200 transition hover:text-amber-100"
-            >
-              Ver simulador oficial da Alluz
-              <ArrowRight className="h-4 w-4" />
-            </a>
           </div>
         </div>
 
@@ -219,10 +232,10 @@ export default function LandingPage() {
           <form
             ref={formCardRef}
             onSubmit={handleSubmit}
-            className="relative rounded-3xl border border-white/25 bg-white/10 p-6 shadow-2xl shadow-blue-900/40 backdrop-blur-xl"
+            className="relative rounded-3xl border border-amber-100/30 bg-amber-50/10 p-6 shadow-2xl shadow-amber-900/30 backdrop-blur-xl"
           >
             <h2 className="mb-1 text-2xl font-semibold">[QUERO MINHA PROPOSTA DE ECONOMIA]</h2>
-            <p className="mb-5 text-sm text-slate-200">Preencha em menos de 1 minuto e receba seu plano de redução real.</p>
+            <p className="mb-4 text-sm text-amber-100/95">Preencha em 1 minuto e receba seu plano de redução real.</p>
 
             <div className="space-y-4">
               <div>
