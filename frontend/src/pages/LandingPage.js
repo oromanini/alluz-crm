@@ -168,12 +168,12 @@ export default function LandingPage() {
   };
 
   return (
-    <main ref={heroRef} className="relative min-h-screen overflow-hidden bg-[#f8fafc] text-slate-900">
+    <main ref={heroRef} className="relative min-h-screen overflow-hidden bg-[#fffbeb] text-slate-900">
       <div className="sun-gradient absolute inset-0 bg-[radial-gradient(circle_at_16%_26%,rgba(251,191,36,0.42),rgba(245,158,11,0.24)_30%,rgba(248,250,252,0.92)_65%,rgba(248,250,252,1)_100%)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(104deg,rgba(245,158,11,0.14)_0%,rgba(255,255,255,0.35)_44%,rgba(56,189,248,0.10)_100%)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_68%_90%,rgba(14,165,233,0.16),transparent_55%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(104deg,rgba(245,158,11,0.20)_0%,rgba(255,255,255,0.32)_44%,rgba(249,115,22,0.14)_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_68%_90%,rgba(251,146,60,0.20),transparent_55%)]" />
       <div className="floating-glow pointer-events-none absolute -left-20 top-14 h-56 w-56 rounded-full bg-amber-200/50 blur-3xl" />
-      <div className="floating-glow pointer-events-none absolute right-5 top-5 h-64 w-64 rounded-full bg-sky-200/45 blur-3xl" />
+      <div className="floating-glow pointer-events-none absolute right-5 top-5 h-64 w-64 rounded-full bg-orange-200/50 blur-3xl" />
       <div className="floating-glow pointer-events-none absolute bottom-8 right-24 h-56 w-56 rounded-full bg-yellow-200/45 blur-3xl" />
 
       <section className="relative mx-auto grid min-h-screen max-w-7xl grid-cols-1 items-center gap-10 px-6 py-10 lg:grid-cols-2 lg:px-10">
@@ -191,8 +191,8 @@ export default function LandingPage() {
           </p>
 
           <div className="flex flex-wrap gap-3 text-sm text-slate-700">
-            <p className="benefit-chip flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Garantia de 25 anos
+            <p className="benefit-chip flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-4 py-2">
+              <CheckCircle2 className="h-4 w-4 text-orange-600" /> Garantia de 25 anos
             </p>
             <p className="benefit-chip flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-2">
               <TrendingUp className="h-4 w-4 text-amber-600" /> Instalação rápida
