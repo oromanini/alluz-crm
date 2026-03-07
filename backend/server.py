@@ -20,7 +20,7 @@ from models import (
     Document, DocumentCreate, Appointment, AppointmentCreate,
     FollowUpCadence, FollowUpCadenceCreate, Notification, NotificationCreate,
     WhatsAppTemplate, WhatsAppTemplateCreate, Token, LoginRequest,
-    WebhookLeadCapture, PipelineStage, Role
+    WebhookLeadCapture, PipelineStage, Role, Origem, Urgencia
 )
 from auth import (
     get_password_hash, verify_password, create_access_token,
@@ -62,6 +62,37 @@ ACTIVITY_TYPE_BY_CHANNEL = {
     "ligacao": "Ligação",
     "email": "Email"
 }
+
+
+def normalizar_origem_webhook(origem: Optional[str]) -> Origem:
+    """Normaliza origem recebida no webhook para enum aceito pelo domínio."""
+    if isinstance(origem, Origem):
+        return origem
+
+    if isinstance(origem, str):
+        normalized = origem.strip().casefold()
+        for origem_enum in Origem:
+            if origem_enum.value.casefold() == normalized:
+                return origem_enum
+
+    return Origem.OUTRO
+
+
+def normalizar_urgencia_webhook(urgencia: Optional[str]) -> Optional[Urgencia]:
+    """Converte urgência textual do webhook para enum; desconhecidos viram None."""
+    if isinstance(urgencia, Urgencia):
+        return urgencia
+
+    if isinstance(urgencia, str):
+        normalized = urgencia.strip().casefold()
+        if not normalized:
+            return None
+
+        for urgencia_enum in Urgencia:
+            if urgencia_enum.value.casefold() == normalized:
+                return urgencia_enum
+
+    return None
 
 
 def validar_assinatura_meta(body: bytes, assinatura: Optional[str]) -> bool:
@@ -112,12 +143,12 @@ async def criar_lead_via_webhook(db, lead_data: WebhookLeadCapture, descricao_or
         nome=lead_data.nome,
         telefone=lead_data.telefone,
         email=lead_data.email,
-        origem=lead_data.origem,
+        origem=normalizar_origem_webhook(lead_data.origem),
         utm_source=lead_data.utm_source,
         utm_medium=lead_data.utm_medium,
         utm_campaign=lead_data.utm_campaign,
         conta_media=lead_data.conta_media,
-        urgencia=lead_data.urgencia
+        urgencia=normalizar_urgencia_webhook(lead_data.urgencia)
     )
 
     lead.classificacao = calcular_classificacao_lead(lead_data.model_dump())
