@@ -65,3 +65,63 @@ Após o teste, confirme no sistema:
 - lead criado,
 - deal na etapa `LEAD_NOVO`,
 - notificações para usuários SDR.
+
+### Troubleshooting: erro 500 no Cloud Run (`/api/webhooks/lead-capture`)
+
+Se o endpoint estiver retornando 500 e o `logging read` voltar sem detalhes, normalmente você está vendo apenas o log de request (`run.googleapis.com/requests`).
+
+1. **Liste serviços e região corretos**
+
+```bash
+gcloud run services list --platform=managed --project=SEU_PROJECT_ID
+```
+
+2. **Busque requests 5xx no endpoint**
+
+```bash
+gcloud logging read '
+resource.type="cloud_run_revision"
+resource.labels.service_name="SEU_SERVICE_NAME"
+resource.labels.location="SUA_REGION"
+logName="projects/SEU_PROJECT_ID/logs/run.googleapis.com%2Frequests"
+httpRequest.requestMethod="POST"
+httpRequest.requestUrl=~"/api/webhooks/lead-capture"
+httpRequest.status>=500
+' \
+--project=SEU_PROJECT_ID \
+--freshness=7d \
+--limit=50 \
+--order=desc \
+--format="table(timestamp,httpRequest.status,httpRequest.requestUrl,trace)"
+```
+
+3. **Use o `trace` para achar o erro real da aplicação**
+
+```bash
+gcloud logging read '
+resource.type="cloud_run_revision"
+resource.labels.service_name="SEU_SERVICE_NAME"
+trace="projects/SEU_PROJECT_ID/traces/TRACE_ID"
+' \
+--project=SEU_PROJECT_ID \
+--limit=100 \
+--order=asc \
+--format="table(timestamp,severity,logName,textPayload,jsonPayload.message)"
+```
+
+4. **Se vier só request log sem stack**, filtre stderr/stdout:
+
+```bash
+gcloud logging read '
+resource.type="cloud_run_revision"
+resource.labels.service_name="SEU_SERVICE_NAME"
+logName=("projects/SEU_PROJECT_ID/logs/run.googleapis.com%2Fstderr" OR "projects/SEU_PROJECT_ID/logs/run.googleapis.com%2Fstdout")
+severity>=ERROR
+' \
+--project=SEU_PROJECT_ID \
+--freshness=7d \
+--limit=100 \
+--order=desc
+```
+
+> Dica: no endpoint `POST /api/webhooks/lead-capture`, qualquer exceção interna durante criação do lead/deal/notificações vira 500 se não houver tratamento explícito.
