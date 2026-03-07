@@ -193,7 +193,7 @@ export default function LandingPage() {
       <section className="relative mx-auto grid min-h-screen max-w-7xl grid-cols-1 items-center gap-10 px-6 py-10 lg:grid-cols-2 lg:px-10">
         <div className="hero-copy space-y-6">
           <div className="inline-flex items-center justify-center rounded-full border border-amber-200 bg-white p-2 shadow-lg shadow-amber-400/20">
-            <img src="/images/logo.png" alt="Logo Alluz" className="h-12 w-12 rounded-full" />
+            <img src="/images/logo.png" alt="Logo Alluz" className="h-12 w-auto object-contain" />
           </div>
 
           <h1 className="max-w-xl text-4xl font-semibold leading-tight md:text-6xl">
