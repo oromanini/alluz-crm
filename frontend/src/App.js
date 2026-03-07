@@ -13,6 +13,7 @@ import Relatorios from './pages/Relatorios';
 import Configuracoes from './pages/Configuracoes';
 import Aprendizado from './pages/Aprendizado';
 import LandingPage from './pages/LandingPage';
+import LandingThankYouPage from './pages/LandingThankYouPage';
 import { LoadingSpinner } from './components/ui/loading-spinner';
 import './index.css';
 
@@ -37,6 +38,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
       <Route path="/landingpage" element={<LandingPage />} />
+      <Route path="/landingpage/obrigado" element={<LandingThankYouPage />} />
       <Route
         path="/"
         element={
