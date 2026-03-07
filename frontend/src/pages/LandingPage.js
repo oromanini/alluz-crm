@@ -51,10 +51,10 @@ export default function LandingPage() {
     const ctx = gsap.context(() => {
       gsap.fromTo(
         '.sun-gradient',
-        { backgroundPosition: '15% 30%' },
+        { backgroundPosition: '18% 28%' },
         {
-          backgroundPosition: '85% 70%',
-          duration: 10,
+          backgroundPosition: '84% 72%',
+          duration: 11,
           ease: 'sine.inOut',
           repeat: -1,
           yoyo: true,
@@ -62,9 +62,10 @@ export default function LandingPage() {
       );
 
       gsap.to('.floating-glow', {
-        y: -16,
-        duration: 2.6,
-        stagger: 0.2,
+        y: -18,
+        x: 8,
+        duration: 3,
+        stagger: 0.3,
         repeat: -1,
         yoyo: true,
         ease: 'sine.inOut',
@@ -167,29 +168,33 @@ export default function LandingPage() {
   };
 
   return (
-    <main ref={heroRef} className="relative min-h-screen overflow-hidden bg-brand-dark text-white">
-      <div className="sun-gradient absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(251,191,36,0.38),rgba(217,119,6,0.2)_42%,rgba(15,23,42,0.88)_74%)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(251,191,36,0.2)_0%,rgba(245,158,11,0.16)_40%,rgba(15,23,42,0.3)_100%)]" />
-      <div className="floating-glow pointer-events-none absolute -left-20 top-24 h-44 w-44 rounded-full bg-amber-200/25 blur-3xl" />
-      <div className="floating-glow pointer-events-none absolute bottom-24 right-10 h-52 w-52 rounded-full bg-yellow-300/20 blur-3xl" />
+    <main ref={heroRef} className="relative min-h-screen overflow-hidden bg-[#12141d] text-white">
+      <div className="sun-gradient absolute inset-0 bg-[radial-gradient(circle_at_18%_24%,rgba(251,191,36,0.42),rgba(245,158,11,0.25)_28%,rgba(30,41,59,0.72)_62%,rgba(15,23,42,0.96)_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(104deg,rgba(245,158,11,0.2)_0%,rgba(30,41,59,0.05)_44%,rgba(59,130,246,0.18)_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_65%_92%,rgba(59,130,246,0.22),transparent_54%)]" />
+      <div className="floating-glow pointer-events-none absolute -left-12 top-20 h-52 w-52 rounded-full bg-amber-300/20 blur-3xl" />
+      <div className="floating-glow pointer-events-none absolute right-0 top-8 h-60 w-60 rounded-full bg-indigo-300/20 blur-3xl" />
+      <div className="floating-glow pointer-events-none absolute bottom-10 right-28 h-60 w-60 rounded-full bg-yellow-200/20 blur-3xl" />
 
       <section className="relative mx-auto grid min-h-screen max-w-7xl grid-cols-1 items-center gap-8 px-6 py-10 lg:grid-cols-2 lg:px-10">
         <div className="hero-copy space-y-5">
-          <img src="/images/logo-alluz.svg" alt="Logo Alluz" className="h-12 w-auto" />
-          <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-sm text-amber-200">
+          <div className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/95 p-2 shadow-lg shadow-amber-400/20">
+            <img src="/images/logo-alluz.svg" alt="Logo Alluz" className="h-12 w-12 rounded-full" />
+          </div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-sm text-amber-100">
             <TrendingUp className="h-4 w-4" /> Engenharia financeira aplicada à energia
           </div>
 
-          <h1 className="max-w-xl text-4xl font-semibold leading-tight text-white md:text-5xl">
+          <h1 className="max-w-xl text-4xl font-semibold leading-tight text-white md:text-6xl">
             Pare de investir em equipamentos. Comece a investir no seu lucro.
           </h1>
-          <p className="max-w-xl text-base text-amber-50/95 md:text-lg">
+          <p className="max-w-xl text-base text-slate-100/95 md:text-lg md:leading-relaxed">
             Na Alluz Energia, nós não vendemos painéis solares. Nós vendemos a redução real da sua conta de luz.
             Economia de até 95% com plano claro e sem complicação técnica.
           </p>
 
           <div className="grid max-w-xl gap-3 text-sm md:grid-cols-2">
-            <div className="rounded-xl border border-amber-100/30 bg-amber-100/10 p-3">
+            <div className="rounded-xl border border-amber-100/30 bg-gradient-to-r from-amber-200/20 to-transparent p-3">
               <p className="font-semibold text-amber-100">Sem Alluz</p>
               <ul className="mt-2 space-y-1.5 text-amber-50/90">
                 <li>Conta subindo todo ano.</li>
@@ -197,7 +202,7 @@ export default function LandingPage() {
                 <li>Sem estratégia financeira.</li>
               </ul>
             </div>
-            <div className="rounded-xl border border-yellow-200/35 bg-yellow-200/10 p-3">
+            <div className="rounded-xl border border-yellow-200/35 bg-gradient-to-r from-yellow-200/20 to-transparent p-3">
               <p className="font-semibold text-yellow-100">Com Alluz</p>
               <ul className="mt-2 space-y-1.5 text-yellow-50/95">
                 <li>Redução imediata e progressiva.</li>
@@ -209,7 +214,7 @@ export default function LandingPage() {
 
           <div className="space-y-2 text-amber-50/95">
             <p className="font-semibold text-white">Por que a Alluz é diferente?</p>
-            <p className="max-w-xl text-sm leading-relaxed text-amber-50/90">
+            <p className="max-w-xl text-sm leading-relaxed text-slate-100/90">
               Aqui o foco é resultado financeiro: quanto você paga hoje, quanto pode economizar e em quanto tempo isso
               vira lucro no seu bolso.
             </p>
@@ -232,86 +237,89 @@ export default function LandingPage() {
           <form
             ref={formCardRef}
             onSubmit={handleSubmit}
-            className="relative rounded-3xl border border-amber-100/30 bg-amber-50/10 p-6 shadow-2xl shadow-amber-900/30 backdrop-blur-xl"
+            className="relative rounded-3xl border border-white/25 bg-slate-900/35 p-6 shadow-2xl shadow-black/40 backdrop-blur-xl"
           >
-            <h2 className="mb-1 text-2xl font-semibold">[QUERO MINHA PROPOSTA DE ECONOMIA]</h2>
-            <p className="mb-4 text-sm text-amber-100/95">Preencha em 1 minuto e receba seu plano de redução real.</p>
+            <div className="pointer-events-none absolute inset-0 rounded-3xl bg-[linear-gradient(130deg,rgba(245,158,11,0.18),rgba(59,130,246,0.1))]" />
+            <div className="relative">
+              <h2 className="mb-1 text-2xl font-semibold">[QUERO MINHA PROPOSTA DE ECONOMIA]</h2>
+              <p className="mb-4 text-sm text-amber-100/95">Preencha em 1 minuto e receba seu plano de redução real.</p>
 
-            <div className="space-y-4">
-              <div>
-                <input
-                  name="nome"
-                  value={formData.nome}
-                  onChange={handleChange}
-                  placeholder="Nome completo"
-                  className="w-full rounded-xl border border-white/25 bg-white/10 px-4 py-3 text-white outline-none transition focus:border-amber-300 focus:bg-white/15"
-                />
-                {errors.nome ? <p className="mt-1 text-xs text-rose-300">{errors.nome}</p> : null}
-              </div>
+              <div className="space-y-4">
+                <div>
+                  <input
+                    name="nome"
+                    value={formData.nome}
+                    onChange={handleChange}
+                    placeholder="Nome completo"
+                    className="w-full rounded-xl border border-white/25 bg-white/10 px-4 py-3 text-white outline-none transition focus:border-amber-300 focus:bg-white/15"
+                  />
+                  {errors.nome ? <p className="mt-1 text-xs text-rose-300">{errors.nome}</p> : null}
+                </div>
 
-              <div>
-                <input
-                  name="telefone"
-                  value={formData.telefone}
-                  onChange={handleChange}
-                  placeholder="Telefone / WhatsApp"
-                  className="w-full rounded-xl border border-white/25 bg-white/10 px-4 py-3 text-white outline-none transition focus:border-amber-300 focus:bg-white/15"
-                />
-                {errors.telefone ? <p className="mt-1 text-xs text-rose-300">{errors.telefone}</p> : null}
-              </div>
+                <div>
+                  <input
+                    name="telefone"
+                    value={formData.telefone}
+                    onChange={handleChange}
+                    placeholder="Telefone / WhatsApp"
+                    className="w-full rounded-xl border border-white/25 bg-white/10 px-4 py-3 text-white outline-none transition focus:border-amber-300 focus:bg-white/15"
+                  />
+                  {errors.telefone ? <p className="mt-1 text-xs text-rose-300">{errors.telefone}</p> : null}
+                </div>
 
-              <div>
-                <input
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="E-mail (opcional)"
-                  className="w-full rounded-xl border border-white/25 bg-white/10 px-4 py-3 text-white outline-none transition focus:border-amber-300 focus:bg-white/15"
-                />
-                {errors.email ? <p className="mt-1 text-xs text-rose-300">{errors.email}</p> : null}
-              </div>
+                <div>
+                  <input
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    placeholder="E-mail (opcional)"
+                    className="w-full rounded-xl border border-white/25 bg-white/10 px-4 py-3 text-white outline-none transition focus:border-amber-300 focus:bg-white/15"
+                  />
+                  {errors.email ? <p className="mt-1 text-xs text-rose-300">{errors.email}</p> : null}
+                </div>
 
-              <div>
-                <input
-                  type="number"
-                  name="conta_media"
-                  value={formData.conta_media}
-                  onChange={handleChange}
-                  placeholder="Conta média mensal (R$)"
-                  className="w-full rounded-xl border border-white/25 bg-white/10 px-4 py-3 text-white outline-none transition focus:border-amber-300 focus:bg-white/15"
-                />
-                {errors.conta_media ? <p className="mt-1 text-xs text-rose-300">{errors.conta_media}</p> : null}
-              </div>
+                <div>
+                  <input
+                    type="number"
+                    name="conta_media"
+                    value={formData.conta_media}
+                    onChange={handleChange}
+                    placeholder="Conta média mensal (R$)"
+                    className="w-full rounded-xl border border-white/25 bg-white/10 px-4 py-3 text-white outline-none transition focus:border-amber-300 focus:bg-white/15"
+                  />
+                  {errors.conta_media ? <p className="mt-1 text-xs text-rose-300">{errors.conta_media}</p> : null}
+                </div>
 
-              <div>
-                <select
-                  name="urgencia"
-                  value={formData.urgencia}
-                  onChange={handleChange}
-                  className="w-full rounded-xl border border-white/25 bg-slate-900/80 px-4 py-3 text-white outline-none transition focus:border-amber-300"
+                <div>
+                  <select
+                    name="urgencia"
+                    value={formData.urgencia}
+                    onChange={handleChange}
+                    className="w-full rounded-xl border border-white/25 bg-slate-900/85 px-4 py-3 text-white outline-none transition focus:border-amber-300"
+                  >
+                    <option value="">Quando você pretende decidir?</option>
+                    {urgenciaOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.urgencia ? <p className="mt-1 text-xs text-rose-300">{errors.urgencia}</p> : null}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-200 px-4 py-3 font-semibold text-slate-900 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  <option value="">Quando você pretende decidir?</option>
-                  {urgenciaOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-                {errors.urgencia ? <p className="mt-1 text-xs text-rose-300">{errors.urgencia}</p> : null}
+                  {isSubmitting ? 'Enviando...' : 'QUERO MINHA PROPOSTA DE ECONOMIA'}
+                  <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+                </button>
+
+                <p className="text-center text-xs text-slate-100/80">
+                  Sem compromisso. Um especialista Alluz entra em contato para apresentar a projeção de economia.
+                </p>
               </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="group flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-300 px-4 py-3 font-semibold text-slate-900 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isSubmitting ? 'Enviando...' : 'QUERO MINHA PROPOSTA DE ECONOMIA'}
-                <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
-              </button>
-
-              <p className="text-center text-xs text-slate-200/80">
-                Sem compromisso. Um especialista Alluz entra em contato para apresentar a projeção de economia.
-              </p>
             </div>
           </form>
         </div>
