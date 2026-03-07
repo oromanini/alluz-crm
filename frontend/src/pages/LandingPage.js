@@ -3,17 +3,17 @@ import axios from 'axios';
 import { ArrowRight, CheckCircle2, Mail, Phone, SunMedium, TrendingUp, User } from 'lucide-react';
 import { toast } from 'sonner';
 
-const urgenciaOptions = ['<= 7 dias', '30 dias', '60+ dias', 'Pesquisando'];
-
 const initialForm = {
   nome: '',
   telefone: '',
   email: '',
   conta_media: '',
-  urgencia: '',
+  aceito_politica: false,
 };
 
 const API_BASE_URL = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const COOKIE_CONSENT_KEY = 'alluz_cookie_consent';
+const PRIVACY_POLICY_URL = 'https://alluz-privacidade-6xdt4nxq.manus.space/';
 
 function formatPhone(value) {
   const digits = value.replace(/\D/g, '').slice(0, 11);
@@ -30,6 +30,7 @@ export default function LandingPage() {
   const [formData, setFormData] = useState(initialForm);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cookieConsent, setCookieConsent] = useState(null);
 
   const utmData = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -38,6 +39,13 @@ export default function LandingPage() {
       utm_medium: params.get('utm_medium') || null,
       utm_campaign: params.get('utm_campaign') || null,
     };
+  }, []);
+
+  useEffect(() => {
+    const storedConsent = window.localStorage.getItem(COOKIE_CONSENT_KEY);
+    if (storedConsent === 'accepted' || storedConsent === 'rejected') {
+      setCookieConsent(storedConsent);
+    }
   }, []);
 
   useEffect(() => {
@@ -111,15 +119,25 @@ export default function LandingPage() {
     if (name === 'telefone' && value.replace(/\D/g, '').length < 10) return 'Telefone inválido';
     if (name === 'email' && value && !/^\S+@\S+\.\S+$/.test(value)) return 'E-mail inválido';
     if (name === 'conta_media' && value && Number(value) <= 0) return 'Informe um valor maior que zero';
-    if (name === 'urgencia' && !value) return 'Selecione a urgência';
+    if (name === 'aceito_politica' && !value) return 'Você precisa aceitar a política de privacidade';
     return '';
   };
 
   const handleChange = (event) => {
-    const { name, value } = event.target;
-    const parsedValue = name === 'telefone' ? formatPhone(value) : value;
+    const { name, value, type, checked } = event.target;
+    const parsedValue = type === 'checkbox' ? checked : name === 'telefone' ? formatPhone(value) : value;
+
     setFormData((previous) => ({ ...previous, [name]: parsedValue }));
     setErrors((previous) => ({ ...previous, [name]: validateField(name, parsedValue) }));
+  };
+
+  const saveCookiePreference = (choice) => {
+    window.localStorage.setItem(COOKIE_CONSENT_KEY, choice);
+    setCookieConsent(choice);
+
+    if (choice === 'rejected') {
+      toast.info('Somente cookies essenciais permanecerão ativos.');
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -127,19 +145,14 @@ export default function LandingPage() {
 
     const nextErrors = Object.entries(formData).reduce((accumulator, [field, value]) => {
       const message = validateField(field, value);
-      if (message && field !== 'email' && field !== 'conta_media') {
-        accumulator[field] = message;
-      }
-      if ((field === 'email' || field === 'conta_media') && message) {
-        accumulator[field] = message;
-      }
+      if (message) accumulator[field] = message;
       return accumulator;
     }, {});
 
-    if (!formData.nome || !formData.telefone || !formData.urgencia) {
+    if (!formData.nome || !formData.telefone || !formData.aceito_politica) {
       if (!formData.nome) nextErrors.nome = 'Nome é obrigatório';
       if (!formData.telefone) nextErrors.telefone = 'Telefone é obrigatório';
-      if (!formData.urgencia) nextErrors.urgencia = 'Selecione a urgência';
+      if (!formData.aceito_politica) nextErrors.aceito_politica = 'Aceite a política para continuar';
     }
 
     setErrors(nextErrors);
@@ -153,7 +166,8 @@ export default function LandingPage() {
         email: formData.email || null,
         origem: 'Site Alluz - Landing Page',
         conta_media: formData.conta_media ? Number(formData.conta_media) : null,
-        urgencia: formData.urgencia,
+        aceito_politica: true,
+        consentimento_lgpd_em: new Date().toISOString(),
         ...utmData,
       });
 
@@ -168,7 +182,7 @@ export default function LandingPage() {
   };
 
   return (
-    <main ref={heroRef} className="relative min-h-screen overflow-hidden bg-[#fffbeb] text-slate-900">
+    <main ref={heroRef} className="relative min-h-screen overflow-hidden bg-[#fffbeb] pb-24 text-slate-900">
       <div className="sun-gradient absolute inset-0 bg-[radial-gradient(circle_at_16%_26%,rgba(251,191,36,0.42),rgba(245,158,11,0.24)_30%,rgba(248,250,252,0.92)_65%,rgba(248,250,252,1)_100%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(104deg,rgba(245,158,11,0.20)_0%,rgba(255,255,255,0.32)_44%,rgba(249,115,22,0.14)_100%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_68%_90%,rgba(251,146,60,0.20),transparent_55%)]" />
@@ -282,22 +296,29 @@ export default function LandingPage() {
                   {errors.conta_media ? <p className="mt-1 text-xs text-rose-500">{errors.conta_media}</p> : null}
                 </div>
 
-                <div>
-                  <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Urgência *</label>
-                  <select
-                    name="urgencia"
-                    value={formData.urgencia}
-                    onChange={handleChange}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-amber-400"
-                  >
-                    <option value="">Quando você pretende decidir?</option>
-                    {urgenciaOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.urgencia ? <p className="mt-1 text-xs text-rose-500">{errors.urgencia}</p> : null}
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <label className="flex cursor-pointer items-start gap-2 text-xs leading-relaxed text-slate-600">
+                    <input
+                      type="checkbox"
+                      name="aceito_politica"
+                      checked={formData.aceito_politica}
+                      onChange={handleChange}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-400"
+                    />
+                    <span>
+                      Concordo com o tratamento dos meus dados conforme a{' '}
+                      <a
+                        href={PRIVACY_POLICY_URL}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium text-slate-700 underline decoration-slate-300 underline-offset-2 hover:text-slate-900"
+                      >
+                        Política de Privacidade
+                      </a>
+                      .
+                    </span>
+                  </label>
+                  {errors.aceito_politica ? <p className="mt-1 text-xs text-rose-500">{errors.aceito_politica}</p> : null}
                 </div>
 
                 <button
@@ -312,11 +333,51 @@ export default function LandingPage() {
                 <p className="flex items-center justify-center gap-1.5 text-center text-xs text-slate-500">
                   <SunMedium className="h-3.5 w-3.5 text-amber-500" /> Sem compromisso. Resposta em até 24h.
                 </p>
+
+                <p className="text-center text-[11px] text-slate-500">
+                  Privacidade em primeiro lugar. Leia nossa{' '}
+                  <a
+                    href={PRIVACY_POLICY_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline decoration-slate-300 underline-offset-2 hover:text-slate-700"
+                  >
+                    Política de Privacidade
+                  </a>
+                  .
+                </p>
               </div>
             </div>
           </form>
         </div>
       </section>
+
+      {cookieConsent === null ? (
+        <div className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-4xl rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <p className="text-sm text-slate-700">
+              Utilizamos cookies essenciais e, com sua permissão, cookies de desempenho para melhorar sua experiência.
+              Você pode aceitar ou rejeitar.
+            </p>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={() => saveCookiePreference('rejected')}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-100"
+              >
+                Rejeitar
+              </button>
+              <button
+                type="button"
+                onClick={() => saveCookiePreference('accepted')}
+                className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-700"
+              >
+                Aceitar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
