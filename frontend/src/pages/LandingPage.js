@@ -24,6 +24,25 @@ function formatPhone(value) {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
+function formatCurrencyMask(value) {
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return '';
+
+  const number = Number(digits) / 100;
+  return number.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function parseCurrencyMaskToNumber(value) {
+  if (!value) return null;
+
+  const normalized = value.replace(/\./g, '').replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
 export default function LandingPage() {
   const heroRef = useRef(null);
   const formCardRef = useRef(null);
@@ -117,17 +136,28 @@ export default function LandingPage() {
   }, []);
 
   const validateField = (name, value) => {
+    const parsedCurrency = parseCurrencyMaskToNumber(value);
+
     if (name === 'nome' && value.trim().length < 3) return 'Informe seu nome completo';
     if (name === 'telefone' && value.replace(/\D/g, '').length < 10) return 'Telefone inválido';
     if (name === 'email' && value && !/^\S+@\S+\.\S+$/.test(value)) return 'E-mail inválido';
-    if (name === 'conta_media' && value && Number(value) <= 0) return 'Informe um valor maior que zero';
+    if (name === 'conta_media' && value && (!parsedCurrency || parsedCurrency <= 0)) {
+      return 'Informe um valor maior que zero';
+    }
     if (name === 'aceito_politica' && !value) return 'Você precisa aceitar a política de privacidade';
     return '';
   };
 
   const handleChange = (event) => {
     const { name, value, type, checked } = event.target;
-    const parsedValue = type === 'checkbox' ? checked : name === 'telefone' ? formatPhone(value) : value;
+    const parsedValue =
+      type === 'checkbox'
+        ? checked
+        : name === 'telefone'
+          ? formatPhone(value)
+          : name === 'conta_media'
+            ? formatCurrencyMask(value)
+            : value;
 
     setFormData((previous) => ({ ...previous, [name]: parsedValue }));
     setErrors((previous) => ({ ...previous, [name]: validateField(name, parsedValue) }));
@@ -167,7 +197,7 @@ export default function LandingPage() {
         telefone: formData.telefone,
         email: formData.email || null,
         origem: 'Site Alluz - Landing Page',
-        conta_media: formData.conta_media ? Number(formData.conta_media) : null,
+        conta_media: parseCurrencyMaskToNumber(formData.conta_media),
         aceito_politica: true,
         consentimento_lgpd_em: new Date().toISOString(),
         ...utmData,
@@ -288,7 +318,7 @@ export default function LandingPage() {
                     Conta média mensal
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     name="conta_media"
                     value={formData.conta_media}
                     onChange={handleChange}
