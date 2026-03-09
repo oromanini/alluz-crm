@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { activitiesAPI, dealsAPI, leadsAPI } from '../lib/api';
@@ -159,6 +159,36 @@ const formatSlaStatus = (minutes, firstContactAt) => {
   };
 };
 
+const getSpeedToLeadLiveStatus = (lead, nowTick) => {
+  if (!lead || lead.ignorar_speed_to_lead) {
+    return {
+      title: 'Speed-to-Lead não aplicável',
+      tone: 'text-white/60',
+      badge: 'Não se aplica',
+      badgeClassName: 'bg-slate-500/10 text-slate-300 border-slate-500/20',
+      elapsed: null,
+    };
+  }
+
+  const elapsed = lead.primeiro_contato_em
+    ? (lead.status_sla_minutos ?? Math.max(Math.round((new Date(lead.primeiro_contato_em).getTime() - new Date(lead.created_at).getTime()) / 60000), 0))
+    : Math.max(Math.round((nowTick - new Date(lead.created_at).getTime()) / 60000), 0);
+
+  const minutes = elapsed ?? 0;
+  const overdue = minutes > 10;
+
+  return {
+    title: overdue ? 'SLA #1 atrasado' : 'SLA #1 dentro do prazo',
+    tone: overdue ? 'text-red-400' : 'text-emerald-400',
+    badge: `${minutes} / 10 min`,
+    badgeClassName: overdue
+      ? 'bg-red-500/10 text-red-300 border-red-500/20'
+      : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
+    elapsed: minutes,
+    overdue: overdue && !lead.primeiro_contato_em,
+  };
+};
+
 const buildLeadFormData = (lead) => ({
   nome: lead.nome || '',
   telefone: formatPhoneMask(lead.telefone || ''),
@@ -218,6 +248,13 @@ export default function Pipeline() {
   const [isArchivingLead, setIsArchivingLead] = useState(false);
   const [activitiesHistory, setActivitiesHistory] = useState([]);
   const [isLoadingActivitiesHistory, setIsLoadingActivitiesHistory] = useState(false);
+  const [nowTick, setNowTick] = useState(Date.now());
+  const notifiedOverdueLeadsRef = useRef(new Set());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchActivitiesHistory = async (leadId, dealId) => {
     if (!leadId || !dealId) {
@@ -668,6 +705,26 @@ export default function Pipeline() {
 
   const leadInEdition = dealInEdition ? leadsMap[dealInEdition.lead_id] : null;
   const slaInfo = formatSlaStatus(leadInEdition?.status_sla_minutos, leadInEdition?.primeiro_contato_em);
+  const speedToLeadInEdition = getSpeedToLeadLiveStatus(leadInEdition, nowTick);
+
+  useEffect(() => {
+    if (!['admin', 'sdr'].includes(user?.role)) return;
+
+    const overdueLeads = Object.values(leadsMap)
+      .filter((lead) => {
+        const speed = getSpeedToLeadLiveStatus(lead, nowTick);
+        return speed.overdue && !notifiedOverdueLeadsRef.current.has(lead.id);
+      })
+      .slice(0, 3);
+
+    overdueLeads.forEach((lead) => {
+      notifiedOverdueLeadsRef.current.add(lead.id);
+    });
+
+    if (overdueLeads.length > 0) {
+      toast.warning(`Leads com SLA de 10min atrasado: ${overdueLeads.map((lead) => lead.nome).join(', ')}`);
+    }
+  }, [leadsMap, nowTick, user?.role]);
 
   if (loading) {
     return (
@@ -710,6 +767,7 @@ export default function Pipeline() {
                     {getDealsByStage(stage).map((deal, index) => {
                       const lead = leadsMap[deal.lead_id];
                       if (!lead) return null;
+                      const speedToLead = getSpeedToLeadLiveStatus(lead, nowTick);
 
                       return (
                         <Draggable key={deal.id} draggableId={deal.id} index={index}>
@@ -765,6 +823,13 @@ export default function Pipeline() {
                                       Valor: <span className="font-mono font-bold text-brand-gold">R$ {deal.valor_estimado.toLocaleString('pt-BR')}</span>
                                     </div>
                                   )}
+
+                                  <div className="rounded-md border border-white/10 bg-black/20 px-2 py-1">
+                                    <p className={`text-[10px] font-semibold ${speedToLead.tone}`}>{speedToLead.title}</p>
+                                    <Badge className={`mt-1 border text-[10px] font-semibold ${speedToLead.badgeClassName}`}>
+                                      {speedToLead.badge}
+                                    </Badge>
+                                  </div>
 
                                   <TooltipProvider delayDuration={200}>
                                     <div className="flex items-center gap-1 pt-2 border-t border-white/5">
@@ -1112,6 +1177,9 @@ export default function Pipeline() {
               <h4 className="text-sm font-semibold text-brand-yellow">Cadência por movimentação de coluna</h4>
               <p className={`text-sm font-semibold ${slaInfo.tone}`}>{slaInfo.title}</p>
               <p className="text-xs text-white/70">{slaInfo.detail}</p>
+              <Badge className={`mt-2 border text-[10px] font-semibold ${speedToLeadInEdition.badgeClassName}`}>
+                SLA #1 ao vivo: {speedToLeadInEdition.badge}
+              </Badge>
             </div>
 
             {stageRequiresNextAction(dealFormData.etapa) && (

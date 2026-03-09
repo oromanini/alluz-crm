@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { leadsAPI, dealsAPI, appointmentsAPI } from '../lib/api';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -16,6 +16,7 @@ import {
 } from '../components/ui/dialog';
 import { Phone, Mail, MapPin, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 
 const SLA_TARGETS = {
   speedToLeadMinutes: 10,
@@ -101,6 +102,7 @@ const getSlaLabel = (status) => {
 };
 
 export default function Leads() {
+  const { user } = useAuth();
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -109,6 +111,23 @@ export default function Leads() {
   const [selectedLead, setSelectedLead] = useState(null);
   const [deals, setDeals] = useState([]);
   const [appointments, setAppointments] = useState([]);
+  const notifiedOverdueLeadsRef = useRef(new Set());
+  const [nowTick, setNowTick] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const getLiveSpeedToLeadMinutes = (lead) => {
+    if (!lead || lead.ignorar_speed_to_lead) return null;
+
+    if (lead.primeiro_contato_em) {
+      return lead.status_sla_minutos ?? getDiffInMinutes(lead.created_at, lead.primeiro_contato_em);
+    }
+
+    return getDiffInMinutes(lead.created_at, new Date(nowTick).toISOString());
+  };
 
   useEffect(() => {
     fetchLeads();
@@ -154,7 +173,7 @@ export default function Leads() {
       .filter((apt) => apt.tipo === 'visita')
       .sort((a, b) => new Date(a.created_at || a.data_hora).getTime() - new Date(b.created_at || b.data_hora).getTime())[0];
 
-    const speedToLeadMinutes = lead.status_sla_minutos ?? getDiffInMinutes(lead.created_at, lead.primeiro_contato_em);
+    const speedToLeadMinutes = getLiveSpeedToLeadMinutes(lead);
     const speedStatus = lead.ignorar_speed_to_lead
       ? 'nao_aplica'
       : speedToLeadMinutes === null
@@ -188,6 +207,7 @@ export default function Leads() {
         elapsed: speedToLeadMinutes,
         meta: `${SLA_TARGETS.speedToLeadMinutes} min`,
         title: 'SLA #1 • Speed-to-lead',
+        isOverdue: speedStatus === 'fora' && !lead.primeiro_contato_em,
       },
       meet: {
         status: meetStatus,
@@ -204,7 +224,26 @@ export default function Leads() {
     };
 
     return acc;
-  }, {}), [appointments, deals, leads]);
+  }, {}), [appointments, deals, leads, nowTick]);
+
+  useEffect(() => {
+    if (!['admin', 'sdr'].includes(user?.role)) return;
+
+    const overdueLeads = leads
+      .filter((lead) => {
+        const speed = slaByLeadId[lead.id]?.speed;
+        return speed?.isOverdue && !notifiedOverdueLeadsRef.current.has(lead.id);
+      })
+      .slice(0, 3);
+
+    overdueLeads.forEach((lead) => {
+      notifiedOverdueLeadsRef.current.add(lead.id);
+    });
+
+    if (overdueLeads.length > 0) {
+      toast.warning(`SLA de 10min atrasado para: ${overdueLeads.map((lead) => lead.nome).join(', ')}`);
+    }
+  }, [leads, slaByLeadId, user?.role]);
 
   const handleFieldChange = (event) => {
     const { name, value, type, checked } = event.target;
