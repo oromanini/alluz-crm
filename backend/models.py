@@ -268,10 +268,20 @@ class Appointment(AppointmentBase):
     
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     responsavel_id: str
+    origem: str = "manual"
     confirmado: bool = False
+    concluido: bool = False
+    concluido_em: Optional[datetime] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+
+class AppointmentUpdate(BaseModel):
+    data_hora: Optional[datetime] = None
+    duracao_minutos: Optional[int] = None
+    notas: Optional[str] = None
+    confirmado: Optional[bool] = None
+    concluido: Optional[bool] = None
 
 class FollowUpTask(BaseModel):
     dia: int

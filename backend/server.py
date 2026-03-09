@@ -17,7 +17,7 @@ import httpx
 from models import (
     User, UserCreate, Lead, LeadCreate, Deal, DealCreate,
     Activity, ActivityCreate, Proposal, ProposalCreate,
-    Document, DocumentCreate, Appointment, AppointmentCreate,
+    Document, DocumentCreate, Appointment, AppointmentCreate, AppointmentUpdate,
     FollowUpCadence, FollowUpCadenceCreate, Notification, NotificationCreate,
     WhatsAppTemplate, WhatsAppTemplateCreate, Token, LoginRequest,
     WebhookLeadCapture, PipelineStage, Role, Origem, Urgencia
@@ -62,6 +62,65 @@ ACTIVITY_TYPE_BY_CHANNEL = {
     "ligacao": "Ligação",
     "email": "Email"
 }
+
+
+def _tipo_appointment_por_acao(tipo_acao: Optional[str], canal: Optional[str]) -> str:
+    base = (tipo_acao or '').strip().casefold()
+    canal_norm = (canal or '').strip().casefold()
+    if 'visita' in base or canal_norm == 'visita':
+        return 'visita'
+    if 'meet' in base or canal_norm in ['meet', 'google meet', 'video']:
+        return 'meet'
+    return 'tarefa'
+
+
+async def sincronizar_compromisso_proxima_acao(db, deal_doc: dict, responsavel_padrao: Optional[str] = None):
+    proxima_acao = deal_doc.get('proxima_acao')
+    if not proxima_acao:
+        await db.appointments.delete_many({"deal_id": deal_doc['id'], "origem": "proxima_acao", "concluido": {"$ne": True}})
+        return
+
+    data_hora = proxima_acao.get('data_hora')
+    if isinstance(data_hora, datetime):
+        data_hora_iso = data_hora.isoformat()
+    else:
+        data_hora_iso = data_hora
+
+    if not data_hora_iso:
+        return
+
+    responsavel = responsavel_padrao or deal_doc.get('responsavel_id') or proxima_acao.get('responsavel')
+    if not responsavel:
+        return
+
+    query = {"deal_id": deal_doc['id'], "origem": "proxima_acao", "concluido": {"$ne": True}}
+    existing = await db.appointments.find_one(query, {"_id": 0})
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    payload = {
+        "deal_id": deal_doc['id'],
+        "lead_id": deal_doc['lead_id'],
+        "tipo": _tipo_appointment_por_acao(proxima_acao.get('tipo'), proxima_acao.get('canal')),
+        "data_hora": data_hora_iso,
+        "duracao_minutos": 60,
+        "notas": proxima_acao.get('descricao'),
+        "responsavel_id": responsavel,
+        "confirmado": False,
+        "updated_at": now_iso,
+        "origem": "proxima_acao",
+    }
+
+    if existing:
+        await db.appointments.update_one({"id": existing['id']}, {"$set": payload})
+    else:
+        appointment = Appointment(**payload)
+        doc = appointment.model_dump()
+        doc['data_hora'] = doc['data_hora'].isoformat()
+        doc['created_at'] = doc['created_at'].isoformat()
+        doc['updated_at'] = doc['updated_at'].isoformat()
+        if doc.get('concluido_em'):
+            doc['concluido_em'] = doc['concluido_em'].isoformat()
+        await db.appointments.insert_one(doc)
 
 
 def normalizar_origem_webhook(origem: Optional[str]) -> Origem:
@@ -668,6 +727,9 @@ async def update_deal(
 
     await db.deals.update_one({"id": deal_id}, {"$set": update_data})
 
+    deal_for_sync = {**existing, **update_data, "id": deal_id}
+    await sincronizar_compromisso_proxima_acao(db, deal_for_sync, responsavel_padrao=current_user.get('id'))
+
     updated = await db.deals.find_one({"id": deal_id}, {"_id": 0})
     if isinstance(updated.get('created_at'), str):
         updated['created_at'] = datetime.fromisoformat(updated['created_at'])
@@ -1000,8 +1062,43 @@ async def list_appointments(
             appointment['created_at'] = datetime.fromisoformat(appointment['created_at'])
         if isinstance(appointment.get('updated_at'), str):
             appointment['updated_at'] = datetime.fromisoformat(appointment['updated_at'])
+        if isinstance(appointment.get('concluido_em'), str):
+            appointment['concluido_em'] = datetime.fromisoformat(appointment['concluido_em'])
     
     return appointments
+
+
+@api_router.put("/appointments/{appointment_id}", response_model=Appointment)
+async def update_appointment(
+    appointment_id: str,
+    appointment_data: AppointmentUpdate,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    existing = await db.appointments.find_one({"id": appointment_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Compromisso não encontrado")
+
+    if current_user['role'] in ['sdr', 'closer'] and existing.get('responsavel_id') != current_user['id']:
+        raise HTTPException(status_code=403, detail="Sem permissão para atualizar este compromisso")
+
+    update_data = {k: v for k, v in appointment_data.model_dump(exclude_none=True).items()}
+    if 'data_hora' in update_data:
+        update_data['data_hora'] = update_data['data_hora'].isoformat()
+
+    if 'concluido' in update_data:
+        update_data['concluido_em'] = datetime.now(timezone.utc).isoformat() if update_data['concluido'] else None
+
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+
+    await db.appointments.update_one({"id": appointment_id}, {"$set": update_data})
+
+    updated = await db.appointments.find_one({"id": appointment_id}, {"_id": 0})
+    for field in ['data_hora', 'created_at', 'updated_at', 'concluido_em']:
+        if isinstance(updated.get(field), str):
+            updated[field] = datetime.fromisoformat(updated[field])
+
+    return updated
 
 
 # NOTIFICATIONS ENDPOINTS
