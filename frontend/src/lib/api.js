@@ -43,6 +43,7 @@ export const proposalsAPI = {
 export const appointmentsAPI = {
   list: (params) => api.get('/appointments', { params }),
   create: (data) => api.post('/appointments', data),
+  update: (id, data) => api.put(`/appointments/${id}`, data),
 };
 
 export const notificationsAPI = {

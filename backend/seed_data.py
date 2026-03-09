@@ -21,15 +21,9 @@ async def seed_database():
     print("Criando usuários....")
     
     # Criar usuários
+    await db.users.delete_many({'email': 'admin@alluz.com.br'})
+
     users = [
-        {
-            'id': str(uuid.uuid4()),
-            'email': 'admin@alluz.com.br',
-            'password_hash': get_password_hash('admin123'),
-            'nome': 'Administrador',
-            'role': 'admin',
-            'created_at': datetime.now(timezone.utc).isoformat()
-        },
         {
             'id': str(uuid.uuid4()),
             'email': 'sdr@alluz.com.br',
@@ -106,7 +100,6 @@ async def seed_database():
     
     print("\nSeed completo!")
     print("\nCredenciais de acesso:")
-    print("Admin: admin@alluz.com.br / admin123")
     print("SDR: sdr@alluz.com.br / sdr123")
     print("Closer: closer@alluz.com.br / closer123")
     

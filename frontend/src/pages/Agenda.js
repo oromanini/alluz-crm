@@ -2,9 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { appointmentsAPI } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 import { Calendar } from '../components/ui/calendar';
 import { LoadingSpinner } from '../components/ui/loading-spinner';
-import { CalendarDays, Clock, MapPin, Video } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Clock, MapPin, RefreshCw, Video } from 'lucide-react';
+import { toast } from 'sonner';
 
 const formatDateKey = (date) => {
   const year = date.getFullYear();
@@ -13,10 +16,19 @@ const formatDateKey = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+const toDateTimeLocalValue = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+};
+
 export default function Agenda() {
   const [appointments, setAppointments] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState(null);
+  const [rescheduleById, setRescheduleById] = useState({});
 
   useEffect(() => {
     fetchAppointments();
@@ -28,8 +40,43 @@ export default function Agenda() {
       setAppointments(response.data);
     } catch (error) {
       console.error('Error fetching appointments', error);
+      toast.error('Erro ao carregar compromissos da agenda.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleComplete = async (appointmentId) => {
+    try {
+      setSavingId(appointmentId);
+      await appointmentsAPI.update(appointmentId, { concluido: true, confirmado: true });
+      toast.success('Compromisso concluído com sucesso.');
+      await fetchAppointments();
+    } catch (error) {
+      console.error('Error completing appointment', error);
+      toast.error('Erro ao concluir compromisso.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handleReschedule = async (appointmentId) => {
+    const newDateTime = rescheduleById[appointmentId];
+    if (!newDateTime) {
+      toast.error('Informe a nova data e hora para reagendar.');
+      return;
+    }
+
+    try {
+      setSavingId(appointmentId);
+      await appointmentsAPI.update(appointmentId, { data_hora: newDateTime, concluido: false });
+      toast.success('Compromisso reagendado.');
+      await fetchAppointments();
+    } catch (error) {
+      console.error('Error rescheduling appointment', error);
+      toast.error('Erro ao reagendar compromisso.');
+    } finally {
+      setSavingId(null);
     }
   };
 
@@ -118,8 +165,8 @@ export default function Agenda() {
               </div>
             ) : (
               selectedAppointments.map((apt) => (
-                <Card key={apt.id} className="bg-black/30 border-white/10 hover:border-white/20 transition-colors">
-                  <CardContent className="p-4">
+                <Card key={apt.id} className={`bg-black/30 border-white/10 hover:border-white/20 transition-colors ${apt.concluido ? 'opacity-70' : ''}`}>
+                  <CardContent className="p-4 space-y-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 space-y-2">
                         <div className="flex items-center gap-2">
@@ -129,8 +176,11 @@ export default function Agenda() {
                             <MapPin className="w-4 h-4 text-green-400" />
                           )}
                           <Badge className={`text-xs font-bold ${apt.tipo === 'meet' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}`}>
-                            {apt.tipo === 'meet' ? 'Meet Online' : 'Visita Técnica'}
+                            {apt.tipo === 'meet' ? 'Meet Online' : 'Compromisso'}
                           </Badge>
+                          {apt.origem === 'proxima_acao' && (
+                            <Badge className="text-xs bg-brand-yellow/10 text-brand-yellow border-brand-yellow/20">Próxima ação</Badge>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2 text-white/60">
@@ -148,9 +198,43 @@ export default function Agenda() {
                         {apt.notas && <p className="text-sm text-white/60">{apt.notas}</p>}
                       </div>
 
-                      <Badge className={`${apt.confirmado ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-orange-500/10 text-orange-400 border-orange-500/20'}`}>
-                        {apt.confirmado ? 'Confirmado' : 'Pendente'}
+                      <Badge className={`${apt.concluido ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' : apt.confirmado ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-orange-500/10 text-orange-400 border-orange-500/20'}`}>
+                        {apt.concluido ? 'Concluído' : apt.confirmado ? 'Confirmado' : 'Pendente'}
                       </Badge>
+                    </div>
+
+                    <div className="grid gap-2 md:grid-cols-[1fr_auto_auto] items-center">
+                      <Input
+                        type="datetime-local"
+                        value={rescheduleById[apt.id] ?? toDateTimeLocalValue(apt.data_hora)}
+                        onChange={(event) =>
+                          setRescheduleById((prev) => ({
+                            ...prev,
+                            [apt.id]: event.target.value,
+                          }))
+                        }
+                        className="bg-brand-dark border-white/10 text-white"
+                        disabled={savingId === apt.id}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="border-white/20 text-white hover:bg-white/5"
+                        onClick={() => handleReschedule(apt.id)}
+                        disabled={savingId === apt.id}
+                      >
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Reagendar
+                      </Button>
+                      <Button
+                        type="button"
+                        className="bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30"
+                        onClick={() => handleComplete(apt.id)}
+                        disabled={savingId === apt.id || apt.concluido}
+                      >
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                        Concluir
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>

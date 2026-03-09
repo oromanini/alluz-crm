@@ -87,7 +87,6 @@ export default function Login() {
             </Button>
           </form>
           <div className="mt-6 pt-6 border-t border-white/5 text-center text-sm text-white/40">
-            <p>Demo - Admin: admin@alluz.com.br / admin123</p>
             <p className="mt-1">SDR: sdr@alluz.com.br / sdr123</p>
           </div>
         </CardContent>
