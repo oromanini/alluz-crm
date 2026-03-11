@@ -214,16 +214,16 @@ export default function LandingPage() {
   };
 
   return (
-    <main ref={heroRef} className="relative min-h-screen overflow-hidden bg-[#fffbeb] pb-24 text-slate-900">
-      <div className="sun-gradient absolute inset-0 bg-[radial-gradient(circle_at_16%_26%,rgba(251,191,36,0.42),rgba(245,158,11,0.24)_30%,rgba(248,250,252,0.92)_65%,rgba(248,250,252,1)_100%)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(104deg,rgba(245,158,11,0.20)_0%,rgba(255,255,255,0.32)_44%,rgba(249,115,22,0.14)_100%)]" />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_68%_90%,rgba(251,146,60,0.20),transparent_55%)]" />
-      <div className="floating-glow pointer-events-none absolute -left-20 top-14 h-56 w-56 rounded-full bg-amber-200/50 blur-3xl" />
-      <div className="floating-glow pointer-events-none absolute right-5 top-5 h-64 w-64 rounded-full bg-orange-200/50 blur-3xl" />
-      <div className="floating-glow pointer-events-none absolute bottom-8 right-24 h-56 w-56 rounded-full bg-yellow-200/45 blur-3xl" />
+    <main ref={heroRef} className="relative min-h-screen overflow-hidden bg-white pb-10 text-slate-900 lg:bg-[#fffbeb] lg:pb-24">
+      <div className="sun-gradient absolute inset-0 hidden bg-[radial-gradient(circle_at_16%_26%,rgba(251,191,36,0.42),rgba(245,158,11,0.24)_30%,rgba(248,250,252,0.92)_65%,rgba(248,250,252,1)_100%)] lg:block" />
+      <div className="pointer-events-none absolute inset-0 hidden bg-[linear-gradient(104deg,rgba(245,158,11,0.20)_0%,rgba(255,255,255,0.32)_44%,rgba(249,115,22,0.14)_100%)] lg:block" />
+      <div className="pointer-events-none absolute inset-0 hidden bg-[radial-gradient(circle_at_68%_90%,rgba(251,146,60,0.20),transparent_55%)] lg:block" />
+      <div className="floating-glow pointer-events-none absolute -left-20 top-14 hidden h-56 w-56 rounded-full bg-amber-200/50 blur-3xl lg:block" />
+      <div className="floating-glow pointer-events-none absolute right-5 top-5 hidden h-64 w-64 rounded-full bg-orange-200/50 blur-3xl lg:block" />
+      <div className="floating-glow pointer-events-none absolute bottom-8 right-24 hidden h-56 w-56 rounded-full bg-yellow-200/45 blur-3xl lg:block" />
 
       <section className="relative mx-auto grid min-h-screen max-w-7xl grid-cols-1 items-center gap-10 px-6 py-10 lg:grid-cols-2 lg:px-10">
-        <div className="hero-copy space-y-6">
+        <div className="hero-copy hidden space-y-6 lg:block">
           <div className="inline-flex items-center justify-center rounded-full border border-amber-300 bg-gradient-to-r from-amber-400 to-orange-500 p-2 shadow-lg shadow-orange-300/40">
             <img src="/images/logo.png" alt="Logo Alluz" className="h-12 w-auto object-contain" />
           </div>
@@ -385,7 +385,7 @@ export default function LandingPage() {
       </section>
 
       {cookieConsent === null ? (
-        <div className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-4xl rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur">
+        <div className="fixed inset-x-3 bottom-3 z-50 mx-auto hidden max-w-4xl rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur md:block">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <p className="text-sm text-slate-700">
               Utilizamos cookies essenciais e, com sua permissão, cookies de desempenho para melhorar sua experiência.
