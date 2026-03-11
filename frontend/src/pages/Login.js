@@ -86,9 +86,6 @@ export default function Login() {
               )}
             </Button>
           </form>
-          <div className="mt-6 pt-6 border-t border-white/5 text-center text-sm text-white/40">
-            <p className="mt-1">SDR: sdr@alluz.com.br / sdr123</p>
-          </div>
         </CardContent>
       </Card>
     </div>
