@@ -86,6 +86,15 @@ class UserCreate(UserBase):
     password: str
 
 
+class UserUpdate(BaseModel):
+    nome: Optional[str] = None
+    role: Optional[Role] = None
+
+
+class UserPasswordReset(BaseModel):
+    password: str
+
+
 class User(UserBase):
     model_config = ConfigDict(extra="ignore")
     

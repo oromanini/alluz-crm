@@ -15,7 +15,7 @@ import uuid
 import httpx
 
 from models import (
-    User, UserCreate, Lead, LeadCreate, Deal, DealCreate,
+    User, UserCreate, UserUpdate, UserPasswordReset, Lead, LeadCreate, Deal, DealCreate,
     Activity, ActivityCreate, Proposal, ProposalCreate,
     Document, DocumentCreate, Appointment, AppointmentCreate, AppointmentUpdate,
     FollowUpCadence, FollowUpCadenceCreate, Notification, NotificationCreate,
@@ -403,22 +403,29 @@ get_current_user = get_current_user_dependency(db)
 
 # AUTH ENDPOINTS
 @api_router.post("/auth/register", response_model=User)
-async def register(user_data: UserCreate, db=Depends(get_db)):
-    """Registrar novo usu\u00e1rio (apenas Admin)"""
+async def register(
+    user_data: UserCreate,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Registrar novo usuário (apenas Admin)"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
     existing = await db.users.find_one({"email": user_data.email})
     if existing:
-        raise HTTPException(status_code=400, detail="Email j\u00e1 cadastrado")
-    
+        raise HTTPException(status_code=400, detail="Email já cadastrado")
+
     user = User(
         email=user_data.email,
         nome=user_data.nome,
         role=user_data.role
     )
-    
+
     doc = user.model_dump()
     doc['password_hash'] = get_password_hash(user_data.password)
     doc['created_at'] = doc['created_at'].isoformat()
-    
+
     await db.users.insert_one(doc)
     return user
 
@@ -1385,6 +1392,102 @@ async def list_users(
             user['last_login'] = datetime.fromisoformat(user['last_login'])
     
     return users
+
+
+@api_router.post("/users", response_model=User)
+async def create_user(
+    user_data: UserCreate,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Criar novo usuário (Admin)"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    existing = await db.users.find_one({"email": user_data.email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email já cadastrado")
+
+    user = User(email=user_data.email, nome=user_data.nome, role=user_data.role)
+    doc = user.model_dump()
+    doc['password_hash'] = get_password_hash(user_data.password)
+    doc['created_at'] = doc['created_at'].isoformat()
+
+    await db.users.insert_one(doc)
+    return user
+
+
+@api_router.put("/users/{user_id}", response_model=User)
+async def update_user(
+    user_id: str,
+    user_data: UserUpdate,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Atualizar dados do usuário (Admin)"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    existing = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    payload = user_data.model_dump(exclude_none=True)
+    if not payload:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+
+    await db.users.update_one({"id": user_id}, {"$set": payload})
+    updated = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+
+    if isinstance(updated.get('created_at'), str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    if isinstance(updated.get('last_login'), str):
+        updated['last_login'] = datetime.fromisoformat(updated['last_login'])
+
+    return updated
+
+
+@api_router.put("/users/{user_id}/password")
+async def reset_user_password(
+    user_id: str,
+    payload: UserPasswordReset,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Resetar senha de usuário (Admin)"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    existing = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"password_hash": get_password_hash(payload.password)}}
+    )
+
+    return {"status": "ok"}
+
+
+@api_router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    """Excluir usuário (Admin)"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    if current_user.get("id") == user_id:
+        raise HTTPException(status_code=400, detail="Não é permitido excluir o próprio usuário")
+
+    result = await db.users.delete_one({"id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    return {"status": "ok"}
 
 
 # Health check
