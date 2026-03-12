@@ -51,6 +51,14 @@ export const notificationsAPI = {
   markRead: (id) => api.put(`/notifications/${id}/read`),
 };
 
+export const usersAPI = {
+  list: () => api.get('/users'),
+  create: (data) => api.post('/users', data),
+  update: (id, data) => api.put(`/users/${id}`, data),
+  resetPassword: (id, data) => api.put(`/users/${id}/password`, data),
+  remove: (id) => api.delete(`/users/${id}`),
+};
+
 export const dashboardAPI = {
   getMetrics: () => api.get('/dashboard/metrics'),
 };
