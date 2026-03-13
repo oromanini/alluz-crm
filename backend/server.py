@@ -600,6 +600,7 @@ async def update_lead(
 async def list_deals(
     etapa: Optional[str] = None,
     responsavel_id: Optional[str] = None,
+    incluir_arquivados: bool = False,
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db)
 ):
@@ -610,6 +611,10 @@ async def list_deals(
         query['etapa'] = etapa
     if responsavel_id:
         query['responsavel_id'] = responsavel_id
+
+    if not incluir_arquivados:
+        active_lead_ids = await db.leads.distinct('id', {"arquivado": {"$ne": True}})
+        query['lead_id'] = {"$in": active_lead_ids}
     
     # SDRs e Closers veem apenas seus deals
     if current_user['role'] in ['sdr', 'closer']:
