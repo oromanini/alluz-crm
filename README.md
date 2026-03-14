@@ -125,3 +125,36 @@ severity>=ERROR
 ```
 
 > Dica: no endpoint `POST /api/webhooks/lead-capture`, qualquer exceção interna durante criação do lead/deal/notificações vira 500 se não houver tratamento explícito.
+
+### Troubleshooting: erro 404 do Google no endpoint (`/api/webhooks/lead-capture`)
+
+Se a resposta vier com página HTML do Google (`Error 404 (Not Found)`) em vez de JSON do FastAPI, o request **não está chegando no backend**. Nesse cenário o problema costuma ser de roteamento (domínio/LB), não da rota Python.
+
+1. **Valide a rota diretamente no serviço do backend (URL nativa do Cloud Run)**
+
+```bash
+curl -i -X POST "https://SEU_BACKEND_RUN_URL/api/webhooks/lead-capture" \
+  -H "Content-Type: application/json" \
+  -d '{"nome":"Teste","telefone":"(44) 99999-9999"}'
+```
+
+2. **Teste também a rota sem prefixo `/api` (o backend aceita as duas)**
+
+```bash
+curl -i -X POST "https://SEU_BACKEND_RUN_URL/webhooks/lead-capture" \
+  -H "Content-Type: application/json" \
+  -d '{"nome":"Teste","telefone":"(44) 99999-9999"}'
+```
+
+3. **Se funcionar na URL nativa e falhar no domínio customizado (`crm.alluzenergia.com.br`)**
+   - revise o path matcher do Load Balancer para encaminhar `/api/*` ao serviço backend correto;
+   - confirme o domain mapping apontando para o serviço certo;
+   - caso use frontend com Nginx, confira se `BACKEND_UPSTREAM` foi definido no build da imagem.
+
+4. **Verificação rápida de endpoint publicado no backend**
+
+```bash
+curl -i "https://SEU_BACKEND_RUN_URL/openapi.json" | head
+```
+
+O JSON deve listar `"/api/webhooks/lead-capture"` e `"/webhooks/lead-capture"`.
