@@ -1292,6 +1292,9 @@ async def get_dashboard_metrics(
 
 
 # WEBHOOK ENDPOINTS
+# Compat: some edge proxies strip the /api prefix before forwarding.
+# Expose webhook endpoints with and without /api so landing submissions don't 404.
+@app.post("/webhooks/lead-capture")
 @api_router.post("/webhooks/lead-capture")
 async def webhook_lead_capture(lead_data: WebhookLeadCapture, db=Depends(get_db)):
     """Webhook interno para capturar leads já normalizados."""
@@ -1299,6 +1302,7 @@ async def webhook_lead_capture(lead_data: WebhookLeadCapture, db=Depends(get_db)
     return {"status": "ok", "lead_id": lead_id}
 
 
+@app.get("/webhooks/meta-leads")
 @api_router.get("/webhooks/meta-leads")
 async def webhook_meta_verify(
     hub_mode: Optional[str] = Query(default=None, alias="hub.mode"),
@@ -1314,6 +1318,7 @@ async def webhook_meta_verify(
     raise HTTPException(status_code=403, detail="Falha na verificação do webhook Meta")
 
 
+@app.post("/webhooks/meta-leads")
 @api_router.post("/webhooks/meta-leads")
 async def webhook_meta_leads(request: Request, db=Depends(get_db)):
     """Recebe notificações do Facebook Lead Ads e cria leads automaticamente."""
