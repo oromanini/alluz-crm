@@ -12,6 +12,7 @@ import {
 } from '../components/ui/select';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
+import { BACKEND_URL } from '../config/backend';
 import { usersAPI } from '../lib/api';
 
 const roleOptions = [
@@ -137,7 +138,7 @@ export default function Configuracoes() {
             <div>
               <p className="text-sm text-white/60 mb-2">Endpoint para Meta Lead Ads:</p>
               <code className="block p-3 bg-brand-dark border border-white/10 rounded text-brand-yellow font-mono text-sm">
-                {process.env.REACT_APP_BACKEND_URL}/api/webhooks/lead-capture
+                {BACKEND_URL}/api/webhooks/lead-capture
               </code>
             </div>
             <p className="text-xs text-white/40">
