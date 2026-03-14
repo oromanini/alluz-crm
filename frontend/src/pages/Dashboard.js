@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { dashboardAPI } from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { LoadingSpinner } from '../components/ui/loading-spinner';
-import { Users, TrendingUp, Clock, CheckCircle, XCircle, DollarSign, AlertTriangle } from 'lucide-react';
+import { Users, TrendingUp, Clock, CheckCircle, XCircle, DollarSign, AlertTriangle, Archive } from 'lucide-react';
 
 export default function Dashboard() {
   const [metrics, setMetrics] = useState(null);
@@ -38,6 +38,13 @@ export default function Dashboard() {
       icon: Users,
       color: 'text-blue-400',
       bgColor: 'bg-blue-500/10'
+    },
+    {
+      title: 'Leads Arquivados',
+      value: metrics?.leads_arquivados || 0,
+      icon: Archive,
+      color: 'text-slate-300',
+      bgColor: 'bg-slate-500/10'
     },
     {
       title: 'Leads Classe A',

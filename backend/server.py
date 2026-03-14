@@ -1195,9 +1195,10 @@ async def get_dashboard_metrics(
     """M\u00e9tricas do dashboard executivo"""
     await atualizar_alertas_sla_speed_to_lead(db)
 
-    # Leads totais
-    total_leads = await db.leads.count_documents({})
-    
+    # Leads ativos (não arquivados) e arquivados
+    total_leads = await db.leads.count_documents({"arquivado": {"$ne": True}})
+    leads_arquivados = await db.leads.count_documents({"arquivado": True})
+
     # Leads por classifica\u00e7\u00e3o
     leads_a = await db.leads.count_documents({"classificacao": "A"})
     leads_b = await db.leads.count_documents({"classificacao": "B"})
@@ -1273,6 +1274,7 @@ async def get_dashboard_metrics(
 
     return {
         "total_leads": total_leads,
+        "leads_arquivados": leads_arquivados,
         "leads_a": leads_a,
         "leads_b": leads_b,
         "leads_c": leads_c,
