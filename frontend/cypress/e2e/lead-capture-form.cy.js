@@ -1,6 +1,6 @@
 describe('Landing page lead capture form', () => {
   it('envia lead via POST para o webhook com os campos obrigatórios', () => {
-    cy.intercept('POST', '/api/webhooks/lead-capture', (req) => {
+    cy.intercept('POST', '**/api/webhooks/lead-capture', (req) => {
       req.reply({
         statusCode: 200,
         body: { status: 'ok' },
@@ -29,7 +29,7 @@ describe('Landing page lead capture form', () => {
   });
 
   it('não envia requisição quando campos obrigatórios não estão preenchidos', () => {
-    cy.intercept('POST', '/api/webhooks/lead-capture').as('leadCapture');
+    cy.intercept('POST', '**/api/webhooks/lead-capture').as('leadCapture');
 
     cy.visit('/landingpage');
     cy.get('[data-testid="submit-form-hero"]').click();
