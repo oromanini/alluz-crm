@@ -17,5 +17,7 @@ RUN if [ -f yarn.lock ]; then yarn install --frozen-lockfile --check-files; fi \
 FROM nginx:alpine
 COPY --from=build /app/build /usr/share/nginx/html
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+ARG BACKEND_UPSTREAM=http://alluz-backend:8080
+RUN sed -i "s|__BACKEND_UPSTREAM__|${BACKEND_UPSTREAM}|g" /etc/nginx/conf.d/default.conf
 EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]
