@@ -1,5 +1,6 @@
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, File, UploadFile, Body, Query, Request
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -20,7 +21,7 @@ from models import (
     Document, DocumentCreate, Appointment, AppointmentCreate, AppointmentUpdate,
     FollowUpCadence, FollowUpCadenceCreate, Notification, NotificationCreate,
     WhatsAppTemplate, WhatsAppTemplateCreate, Token, LoginRequest,
-    WebhookLeadCapture, PipelineStage, Role, Origem, Urgencia
+    WebhookLeadCapture, BotConversaWebhookLeadCapture, PipelineStage, Role, Origem, Urgencia
 )
 from auth import (
     get_password_hash, verify_password, create_access_token,
@@ -52,6 +53,13 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    if request.url.path.endswith('/webhooks/lead-capture'):
+        logger.warning('Validação inválida no webhook BotConversa')
+    return JSONResponse(status_code=422, content={'detail': exc.errors()})
 
 SLA_SPEED_TO_LEAD_MINUTOS = 10
 META_GRAPH_API_VERSION = os.getenv("META_GRAPH_API_VERSION", "v20.0")
@@ -153,6 +161,59 @@ def normalizar_urgencia_webhook(urgencia: Optional[str]) -> Optional[Urgencia]:
 
     return None
 
+
+
+
+def _extrair_conta_media_botconversa(valor_conta: str) -> float:
+    """Converte faixa textual de conta para valor médio usado na classificação."""
+    mapping = {
+        "300-600": 450.0,
+        "601-1000": 800.0,
+        "1000-2000": 1500.0,
+        ">2000": 2200.0
+    }
+    return mapping[valor_conta]
+
+
+def _construir_payload_webhook_botconversa(payload: BotConversaWebhookLeadCapture) -> WebhookLeadCapture:
+    """Mapeia payload do BotConversa para estrutura de lead usada pelo CRM."""
+    tipo_imovel_legivel = "Próprio" if payload.crm_tipo_imovel == "proprio" else "Alugado"
+    tipo_telhado_map = {
+        "colonial": "ceramica",
+        "laje": "laje",
+        "metalico": "metalico",
+        "fibromadeira": "fibromadeira",
+    }
+
+    return WebhookLeadCapture(
+        nome=payload.crm_nome_cliente,
+        telefone="Não informado",
+        origem=Origem.BOTCONVERSA.value,
+        conta_media=_extrair_conta_media_botconversa(payload.crm_valor_conta),
+        urgencia="30 dias" if payload.crm_decisao == "30dias" else "60+ dias",
+        tipo_imovel=tipo_imovel_legivel,
+        tipo_telhado=tipo_telhado_map[payload.crm_telhado],
+        decisao_em_ate_30_dias=payload.crm_decisao == "30dias",
+        imovel_proprio=payload.crm_tipo_imovel == "proprio",
+        possui_area_util_necessaria=payload.crm_telhado in {"colonial", "metalico"},
+        enviou_foto_fatura=True,
+        enviou_foto_telhado=True,
+        apenas_pesquisando=payload.crm_decisao == ">90dias",
+    )
+
+
+def _validar_secret_webhook(request: Request):
+    """Valida header de secret para endpoints webhook protegidos."""
+    configured_secret = os.getenv("WEBHOOK_SECRET")
+    provided_secret = (request.headers.get("X-WEBHOOK-SECRET") or "").strip()
+
+    if not configured_secret:
+        logger.error("WEBHOOK_SECRET não configurado no ambiente")
+        raise HTTPException(status_code=500, detail="WEBHOOK_SECRET não configurado")
+
+    if not hmac.compare_digest(provided_secret, configured_secret):
+        logger.warning("Falha na autenticação do webhook")
+        raise HTTPException(status_code=401, detail="Secret do webhook inválido")
 
 def validar_assinatura_meta(body: bytes, assinatura: Optional[str]) -> bool:
     """Valida assinatura do webhook da Meta quando META_APP_SECRET estiver configurado."""
@@ -1296,12 +1357,52 @@ async def get_dashboard_metrics(
 # WEBHOOK ENDPOINTS
 # Compat: some edge proxies strip the /api prefix before forwarding.
 # Expose webhook endpoints with and without /api so landing submissions don't 404.
-@app.post("/webhooks/lead-capture")
-@api_router.post("/webhooks/lead-capture")
+@app.post("/webhooks/internal/lead-capture")
+@api_router.post("/webhooks/internal/lead-capture")
 async def webhook_lead_capture(lead_data: WebhookLeadCapture, db=Depends(get_db)):
     """Webhook interno para capturar leads já normalizados."""
     lead_id = await criar_lead_via_webhook(db, lead_data, descricao_origem="webhook")
     return {"status": "ok", "lead_id": lead_id}
+
+
+@app.post("/webhooks/lead-capture", status_code=status.HTTP_201_CREATED)
+@api_router.post("/webhooks/lead-capture", status_code=status.HTTP_201_CREATED)
+async def webhook_botconversa_lead_capture(
+    request: Request,
+    payload: BotConversaWebhookLeadCapture,
+    db=Depends(get_db)
+):
+    """Recebe lead qualificado do BotConversa e cria lead classificado no CRM."""
+    logger.info("Webhook BotConversa recebido")
+    _validar_secret_webhook(request)
+
+    lead_payload = _construir_payload_webhook_botconversa(payload)
+    lead_id = await criar_lead_via_webhook(db, lead_payload, descricao_origem=Origem.BOTCONVERSA.value)
+
+    lead_doc = await db.leads.find_one({"id": lead_id}, {"_id": 0, "classificacao": 1})
+    classificacao = lead_doc.get("classificacao") if lead_doc else "B"
+
+    await db.leads.update_one(
+        {"id": lead_id},
+        {"$set": {
+            "status": "qualificado",
+            "nome_cliente": payload.crm_nome_cliente,
+            "tipo_imovel": payload.crm_tipo_imovel,
+            "telhado": payload.crm_telhado,
+            "valor_conta": payload.crm_valor_conta,
+            "decisao": payload.crm_decisao,
+            "origem": Origem.BOTCONVERSA.value,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+
+    logger.info("Lead criado via BotConversa: id=%s classificacao=%s", lead_id, classificacao)
+
+    return {
+        "lead_id": lead_id,
+        "classificacao": classificacao,
+        "mensagem": "lead criado com sucesso"
+    }
 
 
 @app.get("/webhooks/meta-leads")

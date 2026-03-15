@@ -41,6 +41,7 @@ class Origem(str, Enum):
     GOOGLE = "Google"
     INDICACAO = "Indicação"
     ORGANICO = "Orgânico"
+    BOTCONVERSA = "BotConversa WhatsApp"
     OUTRO = "Outro"
 
 
@@ -378,3 +379,63 @@ class WebhookLeadCapture(BaseModel):
     utm_campaign: Optional[str] = None
     conta_media: Optional[float] = None
     urgencia: Optional[str] = None
+    tipo_imovel: Optional[str] = None
+    tipo_telhado: Optional[str] = None
+    decisao_em_ate_30_dias: Optional[bool] = None
+    enviou_foto_fatura: Optional[bool] = None
+    enviou_foto_telhado: Optional[bool] = None
+    apenas_pesquisando: Optional[bool] = None
+    imovel_proprio: Optional[bool] = None
+    possui_area_util_necessaria: Optional[bool] = None
+
+
+class BotConversaWebhookLeadCapture(BaseModel):
+    crm_nome_cliente: str
+    crm_tipo_imovel: str
+    crm_telhado: str
+    crm_valor_conta: str
+    crm_decisao: str
+
+    @field_validator("crm_nome_cliente")
+    @classmethod
+    def normalize_nome_cliente(cls, value: str) -> str:
+        nome = value.strip()
+        if not nome:
+            raise ValueError("crm_nome_cliente é obrigatório")
+        return nome
+
+    @field_validator("crm_tipo_imovel")
+    @classmethod
+    def validate_tipo_imovel(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        allowed = {"proprio", "alugado"}
+        if normalized not in allowed:
+            raise ValueError("crm_tipo_imovel inválido. Use: proprio | alugado")
+        return normalized
+
+    @field_validator("crm_telhado")
+    @classmethod
+    def validate_telhado(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        allowed = {"colonial", "laje", "metalico", "fibromadeira"}
+        if normalized not in allowed:
+            raise ValueError("crm_telhado inválido. Use: colonial | laje | metalico | fibromadeira")
+        return normalized
+
+    @field_validator("crm_valor_conta")
+    @classmethod
+    def validate_valor_conta(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        allowed = {"300-600", "601-1000", "1000-2000", ">2000"}
+        if normalized not in allowed:
+            raise ValueError("crm_valor_conta inválido. Use: 300-600 | 601-1000 | 1000-2000 | >2000")
+        return normalized
+
+    @field_validator("crm_decisao")
+    @classmethod
+    def validate_decisao(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        allowed = {"30dias", "90dias", ">90dias"}
+        if normalized not in allowed:
+            raise ValueError("crm_decisao inválido. Use: 30dias | 90dias | >90dias")
+        return normalized
