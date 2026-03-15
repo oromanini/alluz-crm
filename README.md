@@ -6,7 +6,7 @@ O backend possui endpoints próprios para integração direta com a Meta:
 
 - `GET /api/webhooks/meta-leads`: validação inicial do webhook (`hub.challenge`).
 - `POST /api/webhooks/meta-leads`: recebimento dos eventos `leadgen` do Facebook.
-- `POST /api/webhooks/lead-capture`: endpoint interno para payload já normalizado.
+- `POST /api/webhooks/internal/lead-capture`: endpoint interno para payload já normalizado.
 
 ### Variáveis de ambiente
 
@@ -158,3 +158,57 @@ curl -i "https://SEU_BACKEND_RUN_URL/openapi.json" | head
 ```
 
 O JSON deve listar `"/api/webhooks/lead-capture"` e `"/webhooks/lead-capture"`.
+
+
+## Webhook BotConversa (captura e qualificação automática)
+
+> **Importante:** o BotConversa deve enviar o POST para o **backend** (`https://<BACKEND_URL>/api/...`) e não para o frontend.
+
+### Endpoint
+
+- `POST /api/webhooks/lead-capture`
+
+### Headers obrigatórios
+
+- `Content-Type: application/json`
+- `X-WEBHOOK-SECRET: <SECRET>`
+
+### Payload esperado
+
+```json
+{
+  "crm_nome_cliente": "Oscar",
+  "crm_tipo_imovel": "proprio",
+  "crm_telhado": "colonial",
+  "crm_valor_conta": "601-1000",
+  "crm_decisao": "30dias"
+}
+```
+
+### Exemplo curl
+
+```bash
+curl -i 'https://<BACKEND_URL>/api/webhooks/lead-capture' \
+  -H 'content-type: application/json' \
+  -H 'X-WEBHOOK-SECRET: <SECRET>' \
+  --data-raw '{
+    "crm_nome_cliente":"Oscar",
+    "crm_tipo_imovel":"proprio",
+    "crm_telhado":"colonial",
+    "crm_valor_conta":"601-1000",
+    "crm_decisao":"30dias"
+  }'
+```
+
+### Respostas
+
+- `201`: lead criado com sucesso (`lead_id`, `classificacao`, `mensagem`).
+- `401`: secret inválido.
+- `422`: payload inválido (enum/campo fora do formato esperado).
+
+### Configuração de segurança (Cloud Run + Secret Manager)
+
+1. Crie/atualize o secret no Secret Manager com o valor compartilhado com o BotConversa.
+2. No serviço Cloud Run do backend, adicione variável de ambiente `WEBHOOK_SECRET` apontando para esse secret.
+3. Faça deploy de nova revisão e valide o endpoint com `curl`.
+
