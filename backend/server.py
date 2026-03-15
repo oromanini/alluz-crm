@@ -14,6 +14,7 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 import uuid
 import httpx
+from pydantic import ValidationError
 
 from models import (
     User, UserCreate, UserUpdate, UserPasswordReset, Lead, LeadCreate, Deal, DealCreate,
@@ -21,7 +22,7 @@ from models import (
     Document, DocumentCreate, Appointment, AppointmentCreate, AppointmentUpdate,
     FollowUpCadence, FollowUpCadenceCreate, Notification, NotificationCreate,
     WhatsAppTemplate, WhatsAppTemplateCreate, Token, LoginRequest,
-    WebhookLeadCapture, BotConversaWebhookLeadCapture, PipelineStage, Role, Origem, Urgencia
+    WebhookLeadCapture, BotConversaWebhookLeadCapture, PipelineStage, Role, Origem, Urgencia, TipoImovel, LeadClassification
 )
 from auth import (
     get_password_hash, verify_password, create_access_token,
@@ -53,6 +54,83 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def _parse_datetime_safe(value):
+    if isinstance(value, str):
+        parsed_value = value.replace('Z', '+00:00')
+        try:
+            return datetime.fromisoformat(parsed_value)
+        except ValueError:
+            return value
+    return value
+
+
+def _normalizar_enum_por_valor(raw_value, enum_cls, fallback=None, empty_as_none=False):
+    if raw_value is None:
+        return fallback
+
+    if isinstance(raw_value, enum_cls):
+        return raw_value.value
+
+    if isinstance(raw_value, str):
+        normalized = raw_value.strip().casefold()
+        if not normalized:
+            return None if empty_as_none else fallback
+
+        for enum_option in enum_cls:
+            if enum_option.value.casefold() == normalized:
+                return enum_option.value
+
+    return fallback
+
+
+def serializar_lead_mongo(lead_doc: dict) -> dict:
+    lead = dict(lead_doc)
+
+    # Segurança caso alguma consulta esqueça de remover _id.
+    mongo_id = lead.pop('_id', None)
+    if mongo_id and not lead.get('id'):
+        lead['id'] = str(mongo_id)
+
+    if lead.get('id') is not None:
+        lead['id'] = str(lead['id'])
+
+    for dt_field in ['created_at', 'updated_at', 'primeiro_contato_em', 'sla_alertado_em', 'arquivado_em']:
+        lead[dt_field] = _parse_datetime_safe(lead.get(dt_field))
+
+    lead['origem'] = _normalizar_enum_por_valor(lead.get('origem'), Origem, fallback=Origem.OUTRO.value)
+    lead['classificacao'] = _normalizar_enum_por_valor(lead.get('classificacao'), LeadClassification, fallback=LeadClassification.C.value)
+
+    tipo_imovel_raw = lead.get('tipo_imovel')
+    if isinstance(tipo_imovel_raw, str) and tipo_imovel_raw.strip().casefold() == 'proprio':
+        lead['tipo_imovel'] = 'Próprio'
+    elif isinstance(tipo_imovel_raw, str) and tipo_imovel_raw.strip().casefold() == 'alugado':
+        lead['tipo_imovel'] = 'Alugado'
+    else:
+        lead['tipo_imovel'] = _normalizar_enum_por_valor(lead.get('tipo_imovel'), TipoImovel, empty_as_none=True)
+
+    lead['urgencia'] = _normalizar_enum_por_valor(lead.get('urgencia'), Urgencia, empty_as_none=True)
+
+    if not lead.get('nome'):
+        lead['nome'] = 'Lead sem nome'
+    if not lead.get('telefone'):
+        lead['telefone'] = 'Não informado'
+
+    return lead
+
+
+def _lead_minimo_para_resposta(lead_normalizado: dict) -> Lead:
+    now = datetime.now(timezone.utc)
+    return Lead(
+        id=str(lead_normalizado.get('id') or str(uuid.uuid4())),
+        nome=lead_normalizado.get('nome') or 'Lead sem nome',
+        telefone=lead_normalizado.get('telefone') or 'Não informado',
+        origem=lead_normalizado.get('origem') or Origem.OUTRO.value,
+        classificacao=lead_normalizado.get('classificacao') or LeadClassification.C.value,
+        created_at=lead_normalizado.get('created_at') if isinstance(lead_normalizado.get('created_at'), datetime) else now,
+        updated_at=lead_normalizado.get('updated_at') if isinstance(lead_normalizado.get('updated_at'), datetime) else now,
+    )
 
 
 @app.exception_handler(RequestValidationError)
@@ -591,19 +669,22 @@ async def list_leads(
         query['responsavel_id'] = current_user['id']
     
     leads = await db.leads.find(query, {"_id": 0}).skip(skip).limit(limit).to_list(limit)
-    
-    # Converter timestamps
+
+    leads_serializados = []
     for lead in leads:
-        if isinstance(lead.get('created_at'), str):
-            lead['created_at'] = datetime.fromisoformat(lead['created_at'])
-        if isinstance(lead.get('updated_at'), str):
-            lead['updated_at'] = datetime.fromisoformat(lead['updated_at'])
-        if isinstance(lead.get('primeiro_contato_em'), str):
-            lead['primeiro_contato_em'] = datetime.fromisoformat(lead['primeiro_contato_em'])
-        if isinstance(lead.get('sla_alertado_em'), str):
-            lead['sla_alertado_em'] = datetime.fromisoformat(lead['sla_alertado_em'])
-    
-    return leads
+        lead_normalizado = serializar_lead_mongo(lead)
+        try:
+            leads_serializados.append(Lead.model_validate(lead_normalizado))
+        except ValidationError as exc:
+            logger.error(
+                "Lead inválido em /api/leads id=%s erros=%s payload=%s",
+                lead.get('id') or str(lead.get('_id')),
+                exc.errors(),
+                {k: lead_normalizado.get(k) for k in ['id', 'nome', 'telefone', 'origem', 'classificacao', 'tipo_imovel', 'urgencia']}
+            )
+            leads_serializados.append(_lead_minimo_para_resposta(lead_normalizado))
+
+    return leads_serializados
 
 
 @api_router.get("/leads/{lead_id}", response_model=Lead)
@@ -612,18 +693,18 @@ async def get_lead(lead_id: str, current_user: dict = Depends(get_current_user),
     lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(status_code=404, detail="Lead n\u00e3o encontrado")
-    
-    # Converter timestamps
-    if isinstance(lead.get('created_at'), str):
-        lead['created_at'] = datetime.fromisoformat(lead['created_at'])
-    if isinstance(lead.get('updated_at'), str):
-        lead['updated_at'] = datetime.fromisoformat(lead['updated_at'])
-    if isinstance(lead.get('primeiro_contato_em'), str):
-        lead['primeiro_contato_em'] = datetime.fromisoformat(lead['primeiro_contato_em'])
-    if isinstance(lead.get('sla_alertado_em'), str):
-        lead['sla_alertado_em'] = datetime.fromisoformat(lead['sla_alertado_em'])
-    
-    return lead
+
+    lead_normalizado = serializar_lead_mongo(lead)
+    try:
+        return Lead.model_validate(lead_normalizado)
+    except ValidationError as exc:
+        logger.error(
+            "Lead inválido em /api/leads/{lead_id} id=%s erros=%s payload=%s",
+            lead.get('id') or str(lead.get('_id')),
+            exc.errors(),
+            {k: lead_normalizado.get(k) for k in ['id', 'nome', 'telefone', 'origem', 'classificacao', 'tipo_imovel', 'urgencia']}
+        )
+        return _lead_minimo_para_resposta(lead_normalizado)
 
 
 @api_router.put("/leads/{lead_id}", response_model=Lead)
@@ -1387,7 +1468,7 @@ async def webhook_botconversa_lead_capture(
         {"$set": {
             "status": "qualificado",
             "nome_cliente": payload.crm_nome_cliente,
-            "tipo_imovel": payload.crm_tipo_imovel,
+            "tipo_imovel": "Próprio" if payload.crm_tipo_imovel == "proprio" else "Alugado",
             "telhado": payload.crm_telhado,
             "valor_conta": payload.crm_valor_conta,
             "decisao": payload.crm_decisao,
