@@ -214,6 +214,21 @@ const formatActivityDateTime = (value) => {
   });
 };
 
+const formatLeadDetailsJson = (detalhes) => {
+  if (!detalhes) return 'Nenhum detalhe recebido via API para este lead.';
+
+  try {
+    if (typeof detalhes === 'string') {
+      const parsedDetails = JSON.parse(detalhes);
+      return JSON.stringify(parsedDetails, null, 2);
+    }
+
+    return JSON.stringify(detalhes, null, 2);
+  } catch (error) {
+    return String(detalhes);
+  }
+};
+
 export default function Pipeline() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -704,6 +719,7 @@ export default function Pipeline() {
   };
 
   const leadInEdition = dealInEdition ? leadsMap[dealInEdition.lead_id] : null;
+  const leadDetailsJson = formatLeadDetailsJson(leadInEdition?.detalhes);
   const slaInfo = formatSlaStatus(leadInEdition?.status_sla_minutos, leadInEdition?.primeiro_contato_em);
   const speedToLeadInEdition = getSpeedToLeadLiveStatus(leadInEdition, nowTick);
 
@@ -1121,6 +1137,15 @@ export default function Pipeline() {
                   <Button type="submit" className="bg-brand-yellow text-black hover:bg-brand-yellow/90 font-bold" disabled={isSavingLead || isArchivingLead}>
                     {isSavingLead ? <span className="inline-flex rounded-full bg-black/70 p-1"><LoadingSpinner className="text-brand-yellow" size={14} /></span> : 'Salvar lead'}
                   </Button>
+                </div>
+
+                <div className="space-y-2 border border-white/10 rounded-lg p-3 bg-black/20">
+                  <h5 className="text-sm font-semibold text-brand-yellow">Detalhes (JSON recebido via API)</h5>
+                  <Textarea
+                    value={leadDetailsJson}
+                    readOnly
+                    className="min-h-[220px] bg-black/30 border-white/10 text-white font-mono text-xs leading-relaxed"
+                  />
                 </div>
               </form>
 
