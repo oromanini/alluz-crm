@@ -55,6 +55,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+MAX_LOG_BODY_LENGTH = 10000
+
 
 def _parse_datetime_safe(value):
     if isinstance(value, str):
@@ -131,6 +133,57 @@ def _lead_minimo_para_resposta(lead_normalizado: dict) -> Lead:
         created_at=lead_normalizado.get('created_at') if isinstance(lead_normalizado.get('created_at'), datetime) else now,
         updated_at=lead_normalizado.get('updated_at') if isinstance(lead_normalizado.get('updated_at'), datetime) else now,
     )
+
+
+async def registrar_erro_integracao(
+    request: Request,
+    response_status_code: int,
+    erro: Optional[str] = None,
+    db_conn=None,
+):
+    """Registra falhas 500 para facilitar análise de webhooks e integrações."""
+    database = db_conn or db
+    raw_body = await request.body()
+
+    body = None
+    if raw_body:
+        try:
+            body = json.loads(raw_body)
+        except json.JSONDecodeError:
+            body = raw_body.decode('utf-8', errors='replace')
+
+    body_serializado = json.dumps(body, ensure_ascii=False) if isinstance(body, (dict, list)) else str(body or '')
+    if len(body_serializado) > MAX_LOG_BODY_LENGTH:
+        body_serializado = f"{body_serializado[:MAX_LOG_BODY_LENGTH]}...[truncado]"
+
+    await database.integration_error_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "method": request.method,
+        "path": request.url.path,
+        "query_params": dict(request.query_params),
+        "body": body_serializado,
+        "status_code": response_status_code,
+        "error": erro,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+
+@app.middleware("http")
+async def capturar_erros_500(request: Request, call_next):
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        await registrar_erro_integracao(
+            request,
+            response_status_code=500,
+            erro=str(exc),
+        )
+        raise
+
+    if response.status_code >= 500:
+        await registrar_erro_integracao(request, response_status_code=response.status_code)
+
+    return response
 
 
 @app.exception_handler(RequestValidationError)
@@ -1678,6 +1731,19 @@ async def delete_user(
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
     return {"status": "ok"}
+
+
+@api_router.get("/logs/errors-500")
+async def list_500_error_logs(
+    limit: int = Query(100, ge=1, le=500),
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    logs = await db.integration_error_logs.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    return logs
 
 
 # Health check
