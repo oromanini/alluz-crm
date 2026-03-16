@@ -14,6 +14,7 @@ import Configuracoes from './pages/Configuracoes';
 import Aprendizado from './pages/Aprendizado';
 import LandingPage from './pages/LandingPage';
 import LandingThankYouPage from './pages/LandingThankYouPage';
+import LogsIntegracao from './pages/LogsIntegracao';
 import { LoadingSpinner } from './components/ui/loading-spinner';
 import './index.css';
 
@@ -57,6 +58,7 @@ function AppRoutes() {
         <Route path="relatorios" element={<Relatorios />} />
         <Route path="aprendizado" element={<Aprendizado />} />
         <Route path="configuracoes" element={<Configuracoes />} />
+        <Route path="logs" element={<LogsIntegracao />} />
       </Route>
     </Routes>
   );

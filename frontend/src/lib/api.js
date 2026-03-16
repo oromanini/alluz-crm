@@ -75,3 +75,8 @@ export const whatsappAPI = {
   getTemplates: () => api.get('/whatsapp/templates'),
   generateLink: (params) => api.post('/whatsapp/link', params),
 };
+
+
+export const logsAPI = {
+  list500Errors: (params) => api.get('/logs/errors-500', { params }),
+};

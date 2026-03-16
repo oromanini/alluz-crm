@@ -11,6 +11,7 @@ import {
   BarChart3,
   GraduationCap,
   Settings,
+  ScrollText,
   LogOut,
   Bell,
   Menu,
@@ -37,6 +38,7 @@ export default function Layout() {
     { to: '/relatorios', icon: BarChart3, label: 'Relatórios' },
     { to: '/aprendizado', icon: GraduationCap, label: 'Aprendizado' },
     { to: '/configuracoes', icon: Settings, label: 'Configurações', adminOnly: true },
+    { to: '/logs', icon: ScrollText, label: 'Logs', adminOnly: true },
   ];
 
   const filteredNavItems = navItems.filter(item => {
