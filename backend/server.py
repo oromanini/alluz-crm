@@ -705,9 +705,9 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 async def create_lead(lead_data: LeadCreate, current_user: dict = Depends(get_current_user), db=Depends(get_db)):
     """Criar novo lead"""
     lead = Lead(**lead_data.model_dump())
-    
-    # Calcular classifica\u00e7\u00e3o A/B/C
-    lead.classificacao = calcular_classificacao_lead(lead_data.model_dump())
+
+    # Fluxos internos mantêm classificação manual; classificação automática
+    # acontece apenas nos fluxos de webhook/landing.
     lead.responsavel_id = current_user['id']
     
     doc = lead.model_dump()
@@ -823,12 +823,10 @@ async def update_lead(
     existing = await db.leads.find_one({"id": lead_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Lead n\u00e3o encontrado")
-    
-    # Recalcular classifica\u00e7\u00e3o
-    nova_classificacao = calcular_classificacao_lead(lead_data.model_dump())
-    
+
+    # Atualização manual não recalcula classificação automaticamente.
     update_data = lead_data.model_dump()
-    update_data['classificacao'] = nova_classificacao
+    update_data['classificacao'] = existing.get('classificacao', LeadClassification.C.value)
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
     await db.leads.update_one({"id": lead_id}, {"$set": update_data})
