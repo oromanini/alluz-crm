@@ -56,6 +56,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 MAX_LOG_BODY_LENGTH = 10000
+WEBHOOK_CAPTURE_PATHS = {"/webhooks/lead-capture", "/api/webhooks/lead-capture"}
 
 
 def _parse_datetime_safe(value):
@@ -135,6 +136,62 @@ def _lead_minimo_para_resposta(lead_normalizado: dict) -> Lead:
     )
 
 
+async def _extrair_corpo_request_para_log(request: Request) -> str:
+    raw_body = b""
+    try:
+        raw_body = await request.body()
+    except RuntimeError as exc:
+        if "Stream consumed" in str(exc):
+            return "request body já consumido"
+        raise
+
+    if not raw_body:
+        return ""
+
+    try:
+        parsed = json.loads(raw_body)
+    except json.JSONDecodeError:
+        body_serializado = raw_body.decode('utf-8', errors='replace')
+    else:
+        body_serializado = json.dumps(parsed, ensure_ascii=False)
+
+    if len(body_serializado) > MAX_LOG_BODY_LENGTH:
+        return f"{body_serializado[:MAX_LOG_BODY_LENGTH]}...[truncado]"
+    return body_serializado
+
+
+async def registrar_tentativa_webhook(
+    request: Request,
+    response_status_code: int,
+    erro: Optional[str] = None,
+    db_conn=None,
+):
+    """Registra toda tentativa de uso do webhook público de captura de leads."""
+    database = db_conn or db
+    headers = dict(request.headers)
+    body_serializado = await _extrair_corpo_request_para_log(request)
+
+    logger.info(
+        "Tentativa webhook lead-capture: status=%s path=%s ip=%s",
+        response_status_code,
+        request.url.path,
+        request.client.host if request.client else "desconhecido",
+    )
+
+    await database.webhook_attempt_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "method": request.method,
+        "path": request.url.path,
+        "query_params": dict(request.query_params),
+        "headers": headers,
+        "body": body_serializado,
+        "status_code": response_status_code,
+        "error": erro,
+        "client_host": request.client.host if request.client else None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+
 async def registrar_erro_integracao(
     request: Request,
     response_status_code: int,
@@ -143,18 +200,7 @@ async def registrar_erro_integracao(
 ):
     """Registra falhas 500 para facilitar análise de webhooks e integrações."""
     database = db_conn or db
-    raw_body = await request.body()
-
-    body = None
-    if raw_body:
-        try:
-            body = json.loads(raw_body)
-        except json.JSONDecodeError:
-            body = raw_body.decode('utf-8', errors='replace')
-
-    body_serializado = json.dumps(body, ensure_ascii=False) if isinstance(body, (dict, list)) else str(body or '')
-    if len(body_serializado) > MAX_LOG_BODY_LENGTH:
-        body_serializado = f"{body_serializado[:MAX_LOG_BODY_LENGTH]}...[truncado]"
+    body_serializado = await _extrair_corpo_request_para_log(request)
 
     await database.integration_error_logs.insert_one({
         "id": str(uuid.uuid4()),
@@ -170,15 +216,27 @@ async def registrar_erro_integracao(
 
 @app.middleware("http")
 async def capturar_erros_500(request: Request, call_next):
+    should_log_webhook_attempt = request.url.path in WEBHOOK_CAPTURE_PATHS
+
     try:
         response = await call_next(request)
     except Exception as exc:
+        if should_log_webhook_attempt:
+            await registrar_tentativa_webhook(
+                request,
+                response_status_code=500,
+                erro=str(exc),
+            )
+
         await registrar_erro_integracao(
             request,
             response_status_code=500,
             erro=str(exc),
         )
         raise
+
+    if should_log_webhook_attempt:
+        await registrar_tentativa_webhook(request, response_status_code=response.status_code)
 
     if response.status_code >= 500:
         await registrar_erro_integracao(request, response_status_code=response.status_code)
@@ -1743,6 +1801,19 @@ async def list_500_error_logs(
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     logs = await db.integration_error_logs.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    return logs
+
+
+@api_router.get("/logs/webhook-attempts")
+async def list_webhook_attempt_logs(
+    limit: int = Query(100, ge=1, le=500),
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db)
+):
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    logs = await db.webhook_attempt_logs.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
     return logs
 
 

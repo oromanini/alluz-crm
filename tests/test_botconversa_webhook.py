@@ -214,3 +214,71 @@ def test_webhook_botconversa_payload_antigo_sem_whatsapp_e_sem_valor_conta(clien
         "crm_valor_conta": None,
         "crm_decisao": "90dias",
     }
+
+
+@pytest.mark.asyncio
+async def test_registrar_erro_integracao_quando_stream_ja_consumido_salva_mensagem(app_module):
+    class RequestComStreamConsumido:
+        method = "POST"
+        query_params = {"origem": "teste"}
+
+        class URL:
+            path = "/api/webhooks/lead-capture"
+
+        url = URL()
+
+        async def body(self):
+            raise RuntimeError("Stream consumed")
+
+    fake_db = FakeDB()
+
+    await app_module.registrar_erro_integracao(
+        RequestComStreamConsumido(),
+        response_status_code=500,
+        erro="falha simulada",
+        db_conn=fake_db,
+    )
+
+    assert len(fake_db.integration_error_logs.docs) == 1
+    log = fake_db.integration_error_logs.docs[0]
+    assert log["body"] == "request body já consumido"
+    assert log["status_code"] == 500
+    assert log["error"] == "falha simulada"
+
+
+@pytest.mark.asyncio
+async def test_registrar_tentativa_webhook_salva_headers_e_body(app_module):
+    class Client:
+        host = "203.0.113.10"
+
+    class RequestComBody:
+        method = "POST"
+        query_params = {"utm": "origem"}
+        headers = {"x-webhook-secret": "segredo-teste", "content-type": "application/json"}
+        client = Client()
+
+        class URL:
+            path = "/api/webhooks/lead-capture"
+
+        url = URL()
+
+        async def body(self):
+            return b'{"crm_nome_cliente":"Oscar"}'
+
+    fake_db = FakeDB()
+
+    await app_module.registrar_tentativa_webhook(
+        RequestComBody(),
+        response_status_code=401,
+        erro="Secret do webhook inválido",
+        db_conn=fake_db,
+    )
+
+    assert len(fake_db.webhook_attempt_logs.docs) == 1
+    log = fake_db.webhook_attempt_logs.docs[0]
+    assert log["path"] == "/api/webhooks/lead-capture"
+    assert log["headers"]["x-webhook-secret"] == "segredo-teste"
+    assert log["body"] == '{"crm_nome_cliente": "Oscar"}'
+    assert log["status_code"] == 401
+    assert log["error"] == "Secret do webhook inválido"
+    assert log["client_host"] == "203.0.113.10"
