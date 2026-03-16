@@ -106,6 +106,7 @@ def client(app_module):
 def test_webhook_botconversa_payload_valido_cria_lead(client):
     payload = {
         "crm_nome_cliente": "  Oscar  ",
+        "crm_whatsapp": "5511999998888",
         "crm_tipo_imovel": "proprio",
         "crm_telhado": "colonial",
         "crm_valor_conta": "601-1000",
@@ -129,16 +130,28 @@ def test_webhook_botconversa_payload_valido_cria_lead(client):
     saved = saved_leads[0]
     assert saved["nome"] == "Oscar"
     assert saved["origem"] == "BotConversa WhatsApp"
-    assert saved["tipo_imovel"] == "proprio"
+    assert saved["nome_cliente"] == "Oscar"
+    assert saved["telefone"] == "5511999998888"
+    assert saved["tipo_imovel"] == "Próprio"
     assert saved["telhado"] == "colonial"
-    assert saved["valor_conta"] == "601-1000"
     assert saved["decisao"] == "30dias"
     assert saved["status"] == "qualificado"
+    assert saved["media_consumo"] is None
+    assert saved.get("conta_media") is None
+    assert saved["detalhes"] == {
+        "crm_nome_cliente": "Oscar",
+        "crm_whatsapp": "5511999998888",
+        "crm_tipo_imovel": "proprio",
+        "crm_telhado": "colonial",
+        "crm_valor_conta": "601-1000",
+        "crm_decisao": "30dias",
+    }
 
 
 def test_webhook_botconversa_enum_invalido_retorna_422(client):
     payload = {
         "crm_nome_cliente": "Oscar",
+        "crm_whatsapp": "5511988887777",
         "crm_tipo_imovel": "hotel",
         "crm_telhado": "colonial",
         "crm_valor_conta": "601-1000",
@@ -159,6 +172,7 @@ def test_webhook_botconversa_enum_invalido_retorna_422(client):
 def test_webhook_botconversa_secret_invalido_retorna_401(client):
     payload = {
         "crm_nome_cliente": "Oscar",
+        "crm_whatsapp": "5511977776666",
         "crm_tipo_imovel": "proprio",
         "crm_telhado": "colonial",
         "crm_valor_conta": "601-1000",
@@ -173,3 +187,30 @@ def test_webhook_botconversa_secret_invalido_retorna_401(client):
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Secret do webhook inválido"
+
+
+def test_webhook_botconversa_payload_antigo_sem_whatsapp_e_sem_valor_conta(client):
+    payload = {
+        "crm_nome_cliente": "Maria",
+        "crm_tipo_imovel": "alugado",
+        "crm_telhado": "laje",
+        "crm_decisao": "90dias",
+    }
+
+    response = client.post(
+        "/api/webhooks/lead-capture",
+        headers={"X-WEBHOOK-SECRET": "segredo-teste"},
+        json=payload,
+    )
+
+    assert response.status_code == 201
+    saved = client.fake_db.leads.docs[0]
+    assert saved["telefone"] == "Não informado"
+    assert saved["detalhes"] == {
+        "crm_nome_cliente": "Maria",
+        "crm_whatsapp": None,
+        "crm_tipo_imovel": "alugado",
+        "crm_telhado": "laje",
+        "crm_valor_conta": None,
+        "crm_decisao": "90dias",
+    }

@@ -107,6 +107,7 @@ class User(UserBase):
 class LeadBase(BaseModel):
     nome: str
     telefone: str
+    nome_cliente: Optional[str] = None
     email: Optional[str] = None
     cidade: Optional[str] = None
     bairro: Optional[str] = None
@@ -117,9 +118,13 @@ class LeadBase(BaseModel):
     utm_adset: Optional[str] = None
     utm_ad: Optional[str] = None
     conta_media: Optional[float] = None
+    media_consumo: Optional[float] = None
     consumo_kwh: Optional[float] = None
     tipo_imovel: Optional[TipoImovel] = None
     tipo_telhado: Optional[str] = None
+    telhado: Optional[str] = None
+    decisao: Optional[str] = None
+    detalhes: Optional[Dict[str, Any]] = None
     tem_sombra: Optional[bool] = None
     fase_eletrica: Optional[str] = None
     urgencia: Optional[Urgencia] = None
@@ -372,6 +377,7 @@ class LoginRequest(BaseModel):
 class WebhookLeadCapture(BaseModel):
     nome: str
     telefone: str
+    nome_cliente: Optional[str] = None
     email: Optional[str] = None
     origem: str = "Meta"
     utm_source: Optional[str] = None
@@ -381,6 +387,10 @@ class WebhookLeadCapture(BaseModel):
     urgencia: Optional[str] = None
     tipo_imovel: Optional[str] = None
     tipo_telhado: Optional[str] = None
+    telhado: Optional[str] = None
+    decisao: Optional[str] = None
+    media_consumo: Optional[float] = None
+    detalhes: Optional[Dict[str, Any]] = None
     decisao_em_ate_30_dias: Optional[bool] = None
     enviou_foto_fatura: Optional[bool] = None
     enviou_foto_telhado: Optional[bool] = None
@@ -391,10 +401,13 @@ class WebhookLeadCapture(BaseModel):
 
 class BotConversaWebhookLeadCapture(BaseModel):
     crm_nome_cliente: str
+    crm_whatsapp: Optional[str] = None
     crm_tipo_imovel: str
     crm_telhado: str
-    crm_valor_conta: str
+    crm_valor_conta: Optional[str] = None
     crm_decisao: str
+
+    model_config = ConfigDict(extra="allow")
 
     @field_validator("crm_nome_cliente")
     @classmethod
@@ -424,7 +437,9 @@ class BotConversaWebhookLeadCapture(BaseModel):
 
     @field_validator("crm_valor_conta")
     @classmethod
-    def validate_valor_conta(cls, value: str) -> str:
+    def validate_valor_conta(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
         normalized = value.strip().lower()
         allowed = {"300-600", "601-1000", "1000-2000", ">2000"}
         if normalized not in allowed:
