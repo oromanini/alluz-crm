@@ -38,14 +38,19 @@ jobs:
             .
 
       - name: Deploy backend to Cloud Run
+        env:
+          META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
         run: |
+          test -n "${META_PAGE_ACCESS_TOKEN}" || { echo "Missing GitHub secret: META_PAGE_ACCESS_TOKEN"; exit 1; }
+          test -n "${WEBHOOK_SECRET}" || { echo "Missing GitHub secret: WEBHOOK_SECRET"; exit 1; }
           IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/alluz-backend:${GITHUB_SHA}"
           gcloud run deploy "${BACKEND_SERVICE}" \
             --image "${IMAGE}" \
             --region "${REGION}" \
             --allow-unauthenticated \
             --port 8080 \
-            --set-env-vars "APP_MODULE=server:app,META_VERIFY_TOKEN=alluz-meta-2026,META_PAGE_ACCESS_TOKEN=${{ secrets.META_PAGE_ACCESS_TOKEN }}"
+            --update-env-vars "APP_MODULE=server:app,META_VERIFY_TOKEN=alluz-meta-2026,META_PAGE_ACCESS_TOKEN=${META_PAGE_ACCESS_TOKEN},WEBHOOK_SECRET=${WEBHOOK_SECRET}"
 
       - name: Read backend URL
         id: backend_url
