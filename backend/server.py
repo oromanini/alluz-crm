@@ -242,35 +242,23 @@ def normalizar_urgencia_webhook(urgencia: Optional[str]) -> Optional[Urgencia]:
 
 
 
-def _extrair_conta_media_botconversa(valor_conta: str) -> float:
-    """Converte faixa textual de conta para valor médio usado na classificação."""
-    mapping = {
-        "300-600": 450.0,
-        "601-1000": 800.0,
-        "1000-2000": 1500.0,
-        ">2000": 2200.0
-    }
-    return mapping[valor_conta]
-
-
 def _construir_payload_webhook_botconversa(payload: BotConversaWebhookLeadCapture) -> WebhookLeadCapture:
     """Mapeia payload do BotConversa para estrutura de lead usada pelo CRM."""
     tipo_imovel_legivel = "Próprio" if payload.crm_tipo_imovel == "proprio" else "Alugado"
-    tipo_telhado_map = {
-        "colonial": "ceramica",
-        "laje": "laje",
-        "metalico": "metalico",
-        "fibromadeira": "fibromadeira",
-    }
+
+    payload_bruto = payload.model_dump(mode="json")
 
     return WebhookLeadCapture(
         nome=payload.crm_nome_cliente,
-        telefone="Não informado",
+        nome_cliente=payload.crm_nome_cliente,
+        telefone=payload.crm_whatsapp or "Não informado",
         origem=Origem.BOTCONVERSA.value,
-        conta_media=_extrair_conta_media_botconversa(payload.crm_valor_conta),
         urgencia="30 dias" if payload.crm_decisao == "30dias" else "60+ dias",
         tipo_imovel=tipo_imovel_legivel,
-        tipo_telhado=tipo_telhado_map[payload.crm_telhado],
+        tipo_telhado=payload.crm_telhado,
+        telhado=payload.crm_telhado,
+        decisao=payload.crm_decisao,
+        detalhes=payload_bruto,
         decisao_em_ate_30_dias=payload.crm_decisao == "30dias",
         imovel_proprio=payload.crm_tipo_imovel == "proprio",
         possui_area_util_necessaria=payload.crm_telhado in {"colonial", "metalico"},
@@ -339,6 +327,7 @@ async def criar_lead_via_webhook(db, lead_data: WebhookLeadCapture, descricao_or
     """Cria lead/deal/notificações com base no payload de webhook e retorna o lead_id."""
     lead = Lead(
         nome=lead_data.nome,
+        nome_cliente=lead_data.nome_cliente or lead_data.nome,
         telefone=lead_data.telefone,
         email=lead_data.email,
         origem=normalizar_origem_webhook(lead_data.origem),
@@ -346,6 +335,11 @@ async def criar_lead_via_webhook(db, lead_data: WebhookLeadCapture, descricao_or
         utm_medium=lead_data.utm_medium,
         utm_campaign=lead_data.utm_campaign,
         conta_media=lead_data.conta_media,
+        media_consumo=lead_data.media_consumo,
+        tipo_telhado=lead_data.tipo_telhado,
+        telhado=lead_data.telhado,
+        decisao=lead_data.decisao,
+        detalhes=lead_data.detalhes,
         urgencia=normalizar_urgencia_webhook(lead_data.urgencia)
     )
 
@@ -1468,10 +1462,12 @@ async def webhook_botconversa_lead_capture(
         {"$set": {
             "status": "qualificado",
             "nome_cliente": payload.crm_nome_cliente,
+            "telefone": payload.crm_whatsapp or "Não informado",
             "tipo_imovel": "Próprio" if payload.crm_tipo_imovel == "proprio" else "Alugado",
             "telhado": payload.crm_telhado,
-            "valor_conta": payload.crm_valor_conta,
             "decisao": payload.crm_decisao,
+            "detalhes": payload.model_dump(mode="json"),
+            "media_consumo": None,
             "origem": Origem.BOTCONVERSA.value,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }}
