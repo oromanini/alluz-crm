@@ -94,32 +94,29 @@ export default function LandingPage() {
   });
 
   useEffect(() => {
-    if (window.fbq) {
-      window.fbq('track', 'PageView');
-      return;
-    }
+    if (!window.fbq) {
+      window.fbq = function fbqProxy(...args) {
+        if (window.fbq.callMethod) {
+          window.fbq.callMethod(...args);
+        } else {
+          window.fbq.queue.push(args);
+        }
+      };
 
-    window.fbq = function fbqProxy(...args) {
-      if (window.fbq.callMethod) {
-        window.fbq.callMethod(...args);
-      } else {
-        window.fbq.queue.push(args);
+      if (!window._fbq) {
+        window._fbq = window.fbq;
       }
-    };
 
-    if (!window._fbq) {
-      window._fbq = window.fbq;
+      window.fbq.push = window.fbq;
+      window.fbq.loaded = true;
+      window.fbq.version = '2.0';
+      window.fbq.queue = [];
+
+      const script = document.createElement('script');
+      script.async = true;
+      script.src = 'https://connect.facebook.net/en_US/fbevents.js';
+      document.head.appendChild(script);
     }
-
-    window.fbq.push = window.fbq;
-    window.fbq.loaded = true;
-    window.fbq.version = '2.0';
-    window.fbq.queue = [];
-
-    const script = document.createElement('script');
-    script.async = true;
-    script.src = 'https://connect.facebook.net/en_US/fbevents.js';
-    document.head.appendChild(script);
 
     window.fbq('init', '2181553886009307');
     window.fbq('track', 'PageView');
@@ -185,6 +182,10 @@ export default function LandingPage() {
 
       if (!response.ok) {
         throw new Error('Falha ao cadastrar lead.');
+      }
+
+      if (window.fbq) {
+        window.fbq('track', 'Lead');
       }
 
       navigate('/landingpage/obrigado');
