@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BACKEND_URL } from '../config/backend';
 
@@ -93,6 +93,38 @@ export default function LandingPage() {
     decisao: '',
   });
 
+  useEffect(() => {
+    if (window.fbq) {
+      window.fbq('track', 'PageView');
+      return;
+    }
+
+    window.fbq = function fbqProxy(...args) {
+      if (window.fbq.callMethod) {
+        window.fbq.callMethod(...args);
+      } else {
+        window.fbq.queue.push(args);
+      }
+    };
+
+    if (!window._fbq) {
+      window._fbq = window.fbq;
+    }
+
+    window.fbq.push = window.fbq;
+    window.fbq.loaded = true;
+    window.fbq.version = '2.0';
+    window.fbq.queue = [];
+
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = 'https://connect.facebook.net/en_US/fbevents.js';
+    document.head.appendChild(script);
+
+    window.fbq('init', '2181553886009307');
+    window.fbq('track', 'PageView');
+  }, []);
+
   const currentStep = STEPS[stepIndex];
   const progress = useMemo(() => ((stepIndex + 1) / STEPS.length) * 100, [stepIndex]);
 
@@ -172,6 +204,15 @@ export default function LandingPage() {
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-10 text-white">
+      <noscript>
+        <img
+          height="1"
+          width="1"
+          style={{ display: 'none' }}
+          src="https://www.facebook.com/tr?id=2181553886009307&ev=PageView&noscript=1"
+          alt=""
+        />
+      </noscript>
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.30),transparent_45%),radial-gradient(circle_at_90%_90%,rgba(249,115,22,0.22),transparent_40%)]" />
       <section className="relative z-10 w-full max-w-2xl rounded-3xl border border-white/10 bg-slate-900/85 p-6 shadow-2xl shadow-amber-500/10 backdrop-blur md:p-10">
         <img
