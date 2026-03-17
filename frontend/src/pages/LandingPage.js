@@ -174,8 +174,13 @@ export default function LandingPage() {
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-10 text-white">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_10%,rgba(251,191,36,0.30),transparent_45%),radial-gradient(circle_at_90%_90%,rgba(249,115,22,0.22),transparent_40%)]" />
       <section className="relative z-10 w-full max-w-2xl rounded-3xl border border-white/10 bg-slate-900/85 p-6 shadow-2xl shadow-amber-500/10 backdrop-blur md:p-10">
+        <img
+          src="/images/logo-alluz-oficial.png"
+          alt="Alluz Energia"
+          className="h-10 w-auto"
+        />
         <p className="text-xs font-medium uppercase tracking-[0.18em] text-amber-300/80">Simulador Alluz</p>
-        <h1 className="mt-2 text-2xl font-semibold leading-tight md:text-3xl">Descubra sua elegibilidade em poucos passos</h1>
+        <h1 className="mt-2 text-2xl font-semibold leading-tight md:text-3xl">Preencha as etapas abaixo e receba um estudo gratuito de redução de conta</h1>
 
         <div className="mt-6 h-2 w-full rounded-full bg-white/10">
           <div
