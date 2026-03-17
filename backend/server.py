@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, File, UploadFile, Body, Query, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from dotenv import load_dotenv
@@ -67,6 +68,20 @@ def _parse_datetime_safe(value):
         except ValueError:
             return value
     return value
+
+
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, Exception):
+        return str(value)
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
 
 
 def _normalizar_enum_por_valor(raw_value, enum_cls, fallback=None, empty_as_none=False):
@@ -248,7 +263,19 @@ async def capturar_erros_500(request: Request, call_next):
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     if request.url.path.endswith('/webhooks/lead-capture'):
         logger.warning('Validação inválida no webhook BotConversa')
-    return JSONResponse(status_code=422, content={'detail': exc.errors()})
+
+    try:
+        detail = jsonable_encoder(
+            exc.errors(),
+            custom_encoder={
+                ValueError: lambda value: str(value),
+                Exception: lambda value: str(value),
+            },
+        )
+    except Exception:
+        detail = _json_safe(exc.errors())
+
+    return JSONResponse(status_code=422, content={'detail': detail})
 
 SLA_SPEED_TO_LEAD_MINUTOS = 10
 META_GRAPH_API_VERSION = os.getenv("META_GRAPH_API_VERSION", "v20.0")
