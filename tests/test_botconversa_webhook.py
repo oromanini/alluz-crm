@@ -4,6 +4,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import pytest
+from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
 
 
@@ -282,3 +283,28 @@ async def test_registrar_tentativa_webhook_salva_headers_e_body(app_module):
     assert log["status_code"] == 401
     assert log["error"] == "Secret do webhook inválido"
     assert log["client_host"] == "203.0.113.10"
+
+
+@pytest.mark.asyncio
+async def test_validation_exception_handler_serializa_valueerror_no_ctx(app_module):
+    class RequestFalso:
+        class URL:
+            path = "/api/webhooks/lead-capture"
+
+        url = URL()
+
+    exc = RequestValidationError([
+        {
+            "type": "value_error",
+            "loc": ("body", "crm_tipo_imovel"),
+            "msg": "Value error",
+            "input": "hotel",
+            "ctx": {"error": ValueError("crm_tipo_imovel inválido")},
+        }
+    ])
+
+    response = await app_module.validation_exception_handler(RequestFalso(), exc)
+
+    assert response.status_code == 422
+    response_text = response.body.decode("utf-8")
+    assert "crm_tipo_imovel inválido" in response_text
